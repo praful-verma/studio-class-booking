@@ -70,3 +70,22 @@
 - Implemented `memberService.js`, `memberController.js`, and `memberRoutes.js`.
 - Registered routes in `app.js` under `/api/classes` and `/api/members`.
 - Verified Class CRUD, archiving/restoring, `includeArchived` filter, Member creation, duplicate email validation, and expiry updates via Node integration script.
+
+---
+
+## Step 5: Rooms Management, Session Scheduling & Overlap Prevention
+
+### Prompt
+> Implement Step 5: Rooms + Sessions + Instructor/Co-instructor scheduling.
+> Rooms: STAFF can create, edit, archive, restore rooms. Fields: name, capacity, location, isArchived. Unique room names. Archived rooms hidden by default unless includeArchived=true (STAFF only).
+> Sessions: STAFF create/update/cancel sessions. Each session belongs to one class. Fields: classId, date, startTime, primaryInstructor, room, coInstructors, duration, capacity. Fallback to Class defaultDuration and defaultCapacity when omitted. Calculate startDateTime/endDateTime. Validate primaryInstructor and coInstructors refer to active INSTRUCTOR users. Primary instructor cannot be co-instructor. No duplicate co-instructors.
+> Instructor visibility: STAFF view all sessions; INSTRUCTOR only view assigned sessions (primary or co-instructor). Enforced server-side.
+> Overlap prevention: Room cannot have overlapping SCHEDULED sessions. Instructors (primary or co-instructor) cannot have overlapping SCHEDULED sessions. Condition: existing.startDateTime < newEndDateTime && existing.endDateTime > newStartDateTime. Back-to-back allowed. Cancelled sessions do not block scheduling. Exclude current session ID when updating.
+> Controllers thin, logic in roomService.js and sessionService.js. Register routes in app.js. Update docs.
+
+### Result & Verification
+- Implemented `roomService.js`, `roomController.js`, and `roomRoutes.js`.
+- Implemented `sessionService.js`, `sessionController.js`, and `sessionRoutes.js`.
+- Registered routes in `app.js` under `/api/rooms` and `/api/sessions`.
+- Updated `docs/architecture.md` and `docs/ai-prompts.md`.
+- Verified Room CRUD/archiving, Session creation with default fallbacks, Room overlap prevention, Primary instructor overlap prevention, Co-instructor overlap prevention, back-to-back scheduling, session cancellation slot freeing, and instructor-scoped visibility filtering via Node integration test script.

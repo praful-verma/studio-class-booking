@@ -101,3 +101,34 @@ sequenceDiagram
 - `GET /api/members/:id` — Protected (`requireRole('STAFF')`). Access denied for `INSTRUCTOR` (`403 Forbidden`).
 - `POST /api/members` — Protected (`requireRole('STAFF')`). Trims/lowercases email, enforces email uniqueness, validates `membershipExpiry`.
 - `PATCH /api/members/:id` — Protected (`requireRole('STAFF')`). Allows updating member details and renewing/updating `membershipExpiry` dates.
+
+### 4.4 Room Management Routes (`/api/rooms`)
+- `GET /api/rooms` — Protected (`requireRole('STAFF', 'INSTRUCTOR')`). Excludes archived rooms by default. `includeArchived=true` restricted to `STAFF`.
+- `GET /api/rooms/:id` — Protected (`requireRole('STAFF', 'INSTRUCTOR')`).
+- `POST /api/rooms` — Protected (`requireRole('STAFF')`). Enforces unique room name and `capacity >= 1`.
+- `PATCH /api/rooms/:id` — Protected (`requireRole('STAFF')`).
+- `PATCH /api/rooms/:id/archive` — Protected (`requireRole('STAFF')`). Soft-archives room.
+- `PATCH /api/rooms/:id/restore` — Protected (`requireRole('STAFF')`). Reactivates room.
+
+### 4.5 Session Scheduling Routes (`/api/sessions`)
+- `GET /api/sessions` — Protected (`requireRole('STAFF', 'INSTRUCTOR')`). Server-side role filtering: `INSTRUCTOR` users only receive sessions where they are assigned as primary or co-instructor.
+- `GET /api/sessions/:id` — Protected (`requireRole('STAFF', 'INSTRUCTOR')`). Server-side authorization check ensures instructors can only view assigned sessions.
+- `POST /api/sessions` — Protected (`requireRole('STAFF')`). Validates class, room, active `INSTRUCTOR` roles, computes `startDateTime`/`endDateTime`, and enforces room/instructor overlap prevention.
+- `PATCH /api/sessions/:id` — Protected (`requireRole('STAFF')`). Updates session schedule with overlap verification excluding current session ID.
+- `DELETE /api/sessions/:id` / `PATCH /api/sessions/:id/cancel` — Protected (`requireRole('STAFF')`). Sets status to `CANCELLED`, freeing up room and instructor time slots.
+
+---
+
+## 5. Overlap Prevention Algorithm & Business Rules
+
+1. **Overlap Condition**:
+   A collision exists if an existing non-cancelled session satisfies:
+   `existing.startDateTime < newEndDateTime AND existing.endDateTime > newStartDateTime`
+2. **Room Collision Prevention**:
+   No two active (`SCHEDULED`) sessions can share the same `room` during overlapping time slots.
+3. **Instructor Collision Prevention**:
+   No active `INSTRUCTOR` user can be double-booked during overlapping time slots, whether assigned as `primaryInstructor` or as a `coInstructor`.
+4. **Contiguous Sessions**:
+   Back-to-back sessions are permitted (where `endDateTime` of session A equals `startDateTime` of session B).
+5. **Cancelled Sessions**:
+   Sessions marked `CANCELLED` are ignored during overlap checks, allowing the time slot to be reused.
