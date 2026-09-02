@@ -6,7 +6,10 @@ const User = require('../models/User');
  * Generate JWT token signed with JWT_SECRET
  */
 const generateToken = (userId, role) => {
-  const secret = process.env.JWT_SECRET || 'fallback_secret_key';
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    throw new Error('JWT_SECRET environment variable is not set');
+  }
   const expiresIn = process.env.JWT_EXPIRES_IN || '1d';
 
   return jwt.sign({ userId, role }, secret, { expiresIn });

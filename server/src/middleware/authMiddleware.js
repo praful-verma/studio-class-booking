@@ -24,7 +24,10 @@ const authenticate = async (req, res, next) => {
     }
 
     // Verify JWT Token
-    const secret = process.env.JWT_SECRET || 'fallback_secret_key';
+    const secret = process.env.JWT_SECRET;
+    if (!secret) {
+      throw new Error('JWT_SECRET environment variable is not set');
+    }
     let decoded;
     try {
       decoded = jwt.verify(token, secret);
