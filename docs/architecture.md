@@ -82,13 +82,22 @@ sequenceDiagram
 
 ---
 
-## 4. Server-Side Role Enforcement for Future Routes
+## 4. Implemented API Endpoint Authorization Matrix
 
-Role-based access control (RBAC) is strictly enforced on the server using `requireRole()` middleware factories.
+### 4.1 Authentication Routes (`/api/auth`)
+- `POST /api/auth/login` — Public
+- `GET /api/auth/me` — Protected (`authenticate`)
 
-- **Staff Protected Routes**:
-  - `POST /api/classes`, `PUT /api/classes/:id/archive` -> `requireRole('STAFF')`
-  - `POST /api/sessions`, `DELETE /api/sessions/:id` -> `requireRole('STAFF')`
-  - `POST /api/members` -> `requireRole('STAFF')`
-- **Instructor / Shared Protected Routes**:
-  - `GET /api/sessions/my-sessions` -> `requireRole('INSTRUCTOR', 'STAFF')` (Scoped in service layer so instructors can only view sessions where they are primary or co-instructor).
+### 4.2 Class Management Routes (`/api/classes`)
+- `GET /api/classes` — Protected (`requireRole('STAFF', 'INSTRUCTOR')`). Returns active classes. `includeArchived=true` parameter is strictly restricted to `STAFF` users (returns `403 Forbidden` if requested by `INSTRUCTOR`).
+- `GET /api/classes/:id` — Protected (`requireRole('STAFF', 'INSTRUCTOR')`).
+- `POST /api/classes` — Protected (`requireRole('STAFF')`). Validates `defaultDuration >= 1` and `defaultCapacity >= 1`.
+- `PATCH /api/classes/:id` — Protected (`requireRole('STAFF')`).
+- `PATCH /api/classes/:id/archive` — Protected (`requireRole('STAFF')`). Soft-archives class without deleting existing sessions or bookings.
+- `PATCH /api/classes/:id/restore` — Protected (`requireRole('STAFF')`). Reactivates an archived class.
+
+### 4.3 Member Management Routes (`/api/members`)
+- `GET /api/members` — Protected (`requireRole('STAFF')`). Access denied for `INSTRUCTOR` (`403 Forbidden`).
+- `GET /api/members/:id` — Protected (`requireRole('STAFF')`). Access denied for `INSTRUCTOR` (`403 Forbidden`).
+- `POST /api/members` — Protected (`requireRole('STAFF')`). Trims/lowercases email, enforces email uniqueness, validates `membershipExpiry`.
+- `PATCH /api/members/:id` — Protected (`requireRole('STAFF')`). Allows updating member details and renewing/updating `membershipExpiry` dates.

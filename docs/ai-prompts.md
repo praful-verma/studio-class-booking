@@ -53,3 +53,20 @@
 - Configured environment variables in `.env.example` and `.env`.
 - Updated `docs/architecture.md` and `docs/ai-prompts.md`.
 - Verified authentication, JWT verification, and role-based access control via Node integration test script.
+
+---
+
+## Step 4: Class Management & Member Management
+
+### Prompt
+> Read README.md and the existing Mongoose Class and Member models before making changes.
+> Implement ONLY Class management and Member management.
+> Class Management: create, edit, archive, restore classes. Endpoints: POST /api/classes, GET /api/classes, GET /api/classes/:id, PATCH /api/classes/:id, PATCH /api/classes/:id/archive, PATCH /api/classes/:id/restore. GET accessible to STAFF and INSTRUCTOR. Mutations require STAFF. Archived classes hidden by default unless includeArchived=true. Validate defaultDuration >= 1, defaultCapacity >= 1.
+> Member Management: POST /api/members, GET /api/members, GET /api/members/:id, PATCH /api/members/:id. Email normalized to lowercase and trimmed. Prevent duplicate emails. membershipExpiry required and validated as valid date.
+> Controllers thin, business logic in classService.js and memberService.js. Register routes in Express. Update docs/ai-prompts.md.
+
+### Result & Verification
+- Implemented `classService.js`, `classController.js`, and `classRoutes.js`.
+- Implemented `memberService.js`, `memberController.js`, and `memberRoutes.js`.
+- Registered routes in `app.js` under `/api/classes` and `/api/members`.
+- Verified Class CRUD, archiving/restoring, `includeArchived` filter, Member creation, duplicate email validation, and expiry updates via Node integration script.
