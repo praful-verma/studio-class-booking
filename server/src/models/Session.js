@@ -61,6 +61,7 @@ const sessionSchema = new mongoose.Schema(
 );
 
 // Indexes
+sessionSchema.index({ classId: 1 });
 sessionSchema.index({ date: 1 });
 sessionSchema.index({ startDateTime: 1, endDateTime: 1 });
 

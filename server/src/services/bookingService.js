@@ -309,46 +309,297 @@ const settleAttendance = async (bookingId, attendanceData, user) => {
 };
 
 /**
- * Retrieves bookings with filtering, sorting, and pagination.
+ * Helper to escape CSV values according to RFC 4180
  */
-const getAllBookings = async (query = {}) => {
+const escapeCsvCell = (val) => {
+  if (val === null || val === undefined) return '';
+  const str = String(val);
+  if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+  return str;
+};
+
+/**
+ * Exports attendance CSV for a given session.
+ * Enforces role authorization (STAFF vs assigned INSTRUCTOR).
+ */
+const exportAttendanceCsv = async (sessionId, user) => {
+  if (!mongoose.Types.ObjectId.isValid(sessionId)) {
+    const error = new Error('Invalid session ID format.');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const sessionDoc = await Session.findById(sessionId);
+  if (!sessionDoc) {
+    const error = new Error('Session not found.');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  // Instructor authorization check: must be primary or co-instructor
+  if (user && user.role === 'INSTRUCTOR') {
+    const userIdStr = user._id.toString();
+    const isPrimary = sessionDoc.primaryInstructor && sessionDoc.primaryInstructor.toString() === userIdStr;
+    const isCo = sessionDoc.coInstructors && sessionDoc.coInstructors.some(coId => coId.toString() === userIdStr);
+
+    if (!isPrimary && !isCo) {
+      const error = new Error('Access denied. Instructors can only export attendance for assigned sessions.');
+      error.statusCode = 403;
+      throw error;
+    }
+  }
+
+  // Fetch all bookings for the session
+  const bookings = await Booking.find({ session: sessionId })
+    .populate('member', 'name email')
+    .sort({ createdAt: 1 });
+
+  // Build CSV
+  const headers = ['Member Name', 'Member Email', 'Status', 'Booking Creation Time'];
+  const rows = [headers.map(escapeCsvCell).join(',')];
+
+  for (const b of bookings) {
+    const memberName = b.member ? b.member.name : 'Unknown Member';
+    const memberEmail = b.member ? b.member.email : '';
+    const status = b.status || '';
+    const createdAtIso = b.createdAt ? new Date(b.createdAt).toISOString() : '';
+
+    const row = [
+      escapeCsvCell(memberName),
+      escapeCsvCell(memberEmail),
+      escapeCsvCell(status),
+      escapeCsvCell(createdAtIso)
+    ];
+    rows.push(row.join(','));
+  }
+
+  return rows.join('\r\n');
+};
+
+/**
+ * Retrieves bookings with text search, class filter, session filter, status filter,
+ * role-based instructor visibility, safe sorting whitelist, and database-level pagination.
+ */
+const getAllBookings = async (query = {}, user = null) => {
   const filter = {};
+  let allowedSessionIds = null;
 
-  if (query.sessionId) {
-    filter.session = query.sessionId;
+  // 1. Server-side Role Authorization for Instructors
+  if (user && user.role === 'INSTRUCTOR') {
+    const instructorSessions = await Session.find({
+      $or: [
+        { primaryInstructor: user._id },
+        { coInstructors: user._id }
+      ]
+    }).select('_id');
+
+    allowedSessionIds = instructorSessions.map(s => s._id.toString());
+    if (allowedSessionIds.length === 0) {
+      const limitVal = Math.min(100, Math.max(1, parseInt(query.limit, 10) || 20));
+      return { total: 0, page: 1, pages: 0, limit: limitVal, bookings: [] };
+    }
   }
 
-  if (query.memberId) {
-    filter.member = query.memberId;
+  // 2. Session Filter (sessionId / session)
+  const requestedSessionId = query.sessionId || query.session;
+  if (requestedSessionId) {
+    if (!mongoose.Types.ObjectId.isValid(requestedSessionId)) {
+      const error = new Error('Invalid session ID format.');
+      error.statusCode = 400;
+      throw error;
+    }
+
+    if (allowedSessionIds !== null && !allowedSessionIds.includes(requestedSessionId.toString())) {
+      // Instructor requesting an unassigned session
+      const limitVal = Math.min(100, Math.max(1, parseInt(query.limit, 10) || 20));
+      return { total: 0, page: 1, pages: 0, limit: limitVal, bookings: [] };
+    }
+
+    filter.session = new mongoose.Types.ObjectId(requestedSessionId);
+  } else if (allowedSessionIds !== null) {
+    filter.session = { $in: allowedSessionIds.map(id => new mongoose.Types.ObjectId(id)) };
   }
 
+  // 3. Class Filter (classId / class)
+  const requestedClassId = query.classId || query.class;
+  if (requestedClassId) {
+    if (!mongoose.Types.ObjectId.isValid(requestedClassId)) {
+      const error = new Error('Invalid class ID format.');
+      error.statusCode = 400;
+      throw error;
+    }
+
+    const sessionQuery = { classId: requestedClassId };
+    if (allowedSessionIds !== null) {
+      sessionQuery._id = { $in: allowedSessionIds };
+    }
+
+    const classSessions = await Session.find(sessionQuery).select('_id');
+    const classSessionIds = classSessions.map(s => s._id.toString());
+
+    if (classSessionIds.length === 0) {
+      const limitVal = Math.min(100, Math.max(1, parseInt(query.limit, 10) || 20));
+      return { total: 0, page: 1, pages: 0, limit: limitVal, bookings: [] };
+    }
+
+    const classSessionObjectIds = classSessionIds.map(id => new mongoose.Types.ObjectId(id));
+
+    if (filter.session) {
+      if (filter.session.$in) {
+        const existingSet = new Set(filter.session.$in.map(id => id.toString()));
+        const intersected = classSessionIds.filter(id => existingSet.has(id));
+        if (intersected.length === 0) {
+          const limitVal = Math.min(100, Math.max(1, parseInt(query.limit, 10) || 20));
+          return { total: 0, page: 1, pages: 0, limit: limitVal, bookings: [] };
+        }
+        filter.session = { $in: intersected.map(id => new mongoose.Types.ObjectId(id)) };
+      } else {
+        const singleSessionId = filter.session.toString();
+        if (!classSessionIds.includes(singleSessionId)) {
+          const limitVal = Math.min(100, Math.max(1, parseInt(query.limit, 10) || 20));
+          return { total: 0, page: 1, pages: 0, limit: limitVal, bookings: [] };
+        }
+      }
+    } else {
+      filter.session = { $in: classSessionObjectIds };
+    }
+  }
+
+  // 4. Text Search Filter (member name or email)
+  const searchText = query.search || query.q || query.memberSearch;
+  if (searchText && searchText.trim() !== '') {
+    const searchRegex = new RegExp(searchText.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+    const matchingMembers = await Member.find({
+      $or: [
+        { name: searchRegex },
+        { email: searchRegex }
+      ]
+    }).select('_id');
+
+    const matchingMemberIds = matchingMembers.map(m => m._id);
+    if (matchingMemberIds.length === 0) {
+      const limitVal = Math.min(100, Math.max(1, parseInt(query.limit, 10) || 20));
+      return { total: 0, page: 1, pages: 0, limit: limitVal, bookings: [] };
+    }
+
+    filter.member = { $in: matchingMemberIds };
+  } else if (query.memberId || query.member) {
+    const memberId = query.memberId || query.member;
+    if (!mongoose.Types.ObjectId.isValid(memberId)) {
+      const error = new Error('Invalid member ID format.');
+      error.statusCode = 400;
+      throw error;
+    }
+    filter.member = new mongoose.Types.ObjectId(memberId);
+  }
+
+  // 5. Status Filter
   if (query.status) {
-    filter.status = query.status.toUpperCase();
+    const statusUpper = query.status.toUpperCase();
+    const validStatuses = ['BOOKED', 'WAITLISTED', 'CANCELLED', 'ATTENDED', 'NO_SHOW'];
+    if (!validStatuses.includes(statusUpper)) {
+      const error = new Error(`Invalid status filter. Allowed values: ${validStatuses.join(', ')}`);
+      error.statusCode = 400;
+      throw error;
+    }
+    filter.status = statusUpper;
   }
 
-  const page = parseInt(query.page, 10) || 1;
-  const limit = parseInt(query.limit, 10) || 20;
+  // 6. Safe Sorting Whitelist
+  const rawSortBy = (query.sortBy || query.sort || 'createdAt').toString().toLowerCase();
+  const rawOrder = (query.order || query.sortOrder || query.dir || 'desc').toString().toLowerCase();
+  const sortDir = (rawOrder === 'asc' || rawOrder === '1') ? 1 : -1;
+
+  let isSessionSort = false;
+  let sortFieldKey = 'createdAt';
+
+  if (['sessiondate', 'sessiontime', 'sessiondatetime', 'startdatetime', 'session'].includes(rawSortBy)) {
+    isSessionSort = true;
+  } else if (rawSortBy === 'status') {
+    sortFieldKey = 'status';
+  } else {
+    // Default to createdAt
+    sortFieldKey = 'createdAt';
+  }
+
+  // 7. Pagination Setup
+  const page = Math.max(1, parseInt(query.page, 10) || 1);
+  const limit = Math.min(100, Math.max(1, parseInt(query.limit, 10) || 20));
   const skip = (page - 1) * limit;
 
-  const total = await Booking.countDocuments(filter);
-  const bookings = await Booking.find(filter)
-    .sort({ createdAt: -1 })
-    .skip(skip)
-    .limit(limit)
-    .populate('member', 'name email membershipExpiry')
-    .populate({
-      path: 'session',
-      populate: [
-        { path: 'classId', select: 'title discipline' },
-        { path: 'room', select: 'name location' },
-        { path: 'primaryInstructor', select: 'name email' }
-      ]
-    });
+  let total = 0;
+  let bookings = [];
+
+  if (isSessionSort) {
+    // Database aggregation to sort by joined session.startDateTime
+    const pipeline = [
+      { $match: filter },
+      {
+        $lookup: {
+          from: 'sessions',
+          localField: 'session',
+          foreignField: '_id',
+          as: 'sessionDoc'
+        }
+      },
+      { $unwind: '$sessionDoc' },
+      { $sort: { 'sessionDoc.startDateTime': sortDir, createdAt: -1, _id: 1 } },
+      {
+        $facet: {
+          metadata: [{ $count: 'total' }],
+          data: [{ $skip: skip }, { $limit: limit }]
+        }
+      }
+    ];
+
+    const aggregateResult = await Booking.aggregate(pipeline);
+    const metadata = aggregateResult[0]?.metadata || [];
+    total = metadata[0]?.total || 0;
+
+    const bookingItems = aggregateResult[0]?.data || [];
+    const bookingIds = bookingItems.map(item => item._id);
+
+    const populatedBookings = await Booking.find({ _id: { $in: bookingIds } })
+      .populate('member', 'name email membershipExpiry')
+      .populate({
+        path: 'session',
+        populate: [
+          { path: 'classId', select: 'title discipline' },
+          { path: 'room', select: 'name location' },
+          { path: 'primaryInstructor', select: 'name email' }
+        ]
+      });
+
+    const bookingMap = new Map(populatedBookings.map(b => [b._id.toString(), b]));
+    bookings = bookingIds.map(id => bookingMap.get(id.toString())).filter(Boolean);
+  } else {
+    total = await Booking.countDocuments(filter);
+    const sortObj = sortFieldKey === 'status'
+      ? { status: sortDir, createdAt: -1 }
+      : { createdAt: sortDir };
+
+    bookings = await Booking.find(filter)
+      .sort(sortObj)
+      .skip(skip)
+      .limit(limit)
+      .populate('member', 'name email membershipExpiry')
+      .populate({
+        path: 'session',
+        populate: [
+          { path: 'classId', select: 'title discipline' },
+          { path: 'room', select: 'name location' },
+          { path: 'primaryInstructor', select: 'name email' }
+        ]
+      });
+  }
 
   return {
     total,
     page,
-    pages: Math.ceil(total / limit),
+    pages: Math.ceil(total / limit) || 0,
+    limit,
     bookings
   };
 };
@@ -401,5 +652,7 @@ module.exports = {
   settleAttendance,
   getAllBookings,
   getBookingById,
-  getBookingHistory
+  getBookingHistory,
+  exportAttendanceCsv
 };
+

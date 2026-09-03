@@ -1,4 +1,5 @@
-require('dotenv').config();
+const path = require('path');
+require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
 const connectDB = require('../config/db');
 const classService = require('../services/classService');
 const roomService = require('../services/roomService');

@@ -1,55 +1,102 @@
 # Architectural Decisions & Design Rationale
 
-This document logs key architectural decisions, concurrency strategies, state machine rules, and technical trade-offs for the **Class Booking** application.
+This file contains the main technical decisions I made while building the Class Booking application. I have focused on decisions where there was more than one possible approach.
 
 ---
 
-## 1. Concurrency Control & Capacity Safety
+## 1. Handling Concurrent Bookings
 
 ### Problem
-Simultaneous booking creation requests for a high-demand session can cause race conditions where multiple requests observe available capacity (`bookedCount < session.capacity`) concurrently, leading to session overbooking beyond its configured capacity limit.
 
-### Decision & Implementation
-- **Primary Mechanism (MongoDB Transactions)**: Where MongoDB supports multi-document transactions (MongoDB Atlas cluster / Replica Set), `bookingService` uses `mongoose.startSession()` and `session.withTransaction()` to wrap capacity counting, status determination (`BOOKED` vs `WAITLISTED`), booking document creation, and history logging inside an isolated ACID transaction.
-- **Secondary Mechanism (Per-Session Mutex Queue)**: To guarantee concurrency safety across both transactional environments and single-node standalone development instances, `bookingService` implements an in-memory per-session execution mutex (`withSessionLock(sessionId, ...)`).
-- **Result**: Simultaneous booking requests for the same session are serialized cleanly. Request A completes capacity check and document creation first (status: `BOOKED`), while Request B executes immediately afterwards, observing full capacity and correctly creating a `WAITLISTED` reservation.
+Two users could try to book the same session at almost the same time. If both requests check the available capacity before either booking is saved, the session could become overbooked.
 
----
+### Decision
 
-## 2. Centralized Booking Status Transition State Machine
+I used MongoDB transactions for the booking operation so that the capacity check and booking creation are handled together.
 
-### Rationale
-Scattershot status updates across controllers or routes lead to invalid state corruptions (e.g. attempting to mark attendance for a cancelled booking or re-booking an attended session).
+For local development where transactions may not be available, I also added a per-session lock so that booking requests for the same session are processed one at a time.
 
-### State Machine Matrix (`server/src/services/bookingStateService.js`)
+### Why
 
-| Old Status | Allowed Target Statuses | Description |
-|---|---|---|
-| `NONE` | `BOOKED`, `WAITLISTED` | Initial booking creation depending on available capacity |
-| `BOOKED` | `CANCELLED`, `ATTENDED`, `NO_SHOW` | Staff cancellation or attendance settlement |
-| `WAITLISTED` | `CANCELLED`, `BOOKED` | Staff cancellation or automatic promotion after cancellation |
-| `CANCELLED` | *None* | Terminal state |
-| `ATTENDED` | *None* | Terminal state |
-| `NO_SHOW` | *None* | Terminal state |
-
-Attempting any transition not listed above immediately throws a `400 Bad Request` error.
+The main goal was to make sure the session capacity cannot be exceeded even when multiple booking requests arrive together.
 
 ---
 
-## 3. Waitlist Auto-Promotion Strategy
+## 2. Booking Status State Machine
 
-### Logic
-When a `BOOKED` reservation is cancelled by staff:
-1. The target booking status updates from `BOOKED` to `CANCELLED`.
-2. The service queries for the earliest waitlisted reservation for that session:
-   `Booking.findOne({ session: sessionId, status: 'WAITLISTED' }).sort({ createdAt: 1 })`.
-3. If an eligible waitlisted booking is found and the member's `membershipExpiry` is still valid (`>= currentDate`), the waitlisted booking is automatically promoted to `BOOKED`.
-4. An immutable `BookingHistory` record is automatically written (`oldStatus: 'WAITLISTED'`, `newStatus: 'BOOKED'`, `staffNote: 'Auto-promoted from waitlist after cancellation'`).
+### Problem
+
+Booking status can change in several ways, and allowing status updates from different places in the code could result in invalid transitions.
+
+### Decision
+
+I created a separate booking state service to control the allowed status changes.
+
+| Current Status | Allowed Status               |
+| -------------- | ---------------------------- |
+| NONE           | BOOKED, WAITLISTED           |
+| BOOKED         | CANCELLED, ATTENDED, NO_SHOW |
+| WAITLISTED     | CANCELLED, BOOKED            |
+| CANCELLED      | None                         |
+| ATTENDED       | None                         |
+| NO_SHOW        | None                         |
+
+### Why
+
+Keeping these rules in one place makes the booking flow easier to understand and prevents invalid status changes.
 
 ---
 
-## 4. Attendance Settlement Start-Time Rule
+## 3. Waitlist Promotion
 
-### Logic
-Attendance (`ATTENDED` or `NO_SHOW`) can **only** be marked after the session's scheduled start time (`new Date() >= session.startDateTime`).
-Attempting to mark attendance before `session.startDateTime` throws a `400 Bad Request` error (`Attendance cannot be marked before the session scheduled start time`).
+### Problem
+
+When a booked member cancels, the available place should go to someone on the waitlist.
+
+### Decision
+
+I promote the earliest waitlisted booking based on its creation time.
+
+Before promoting it, the member's membership expiry is checked. A new `BookingHistory` entry is also created for the promotion.
+
+### Why
+
+Using creation time gives a simple first-come-first-served order for the waitlist.
+
+---
+
+## 4. Attendance Rule
+
+### Problem
+
+Attendance should not be marked before a session actually starts.
+
+### Decision
+
+I added a server-side check that compares the current time with the session's `startDateTime`. Attendance can only be marked after the scheduled start time.
+
+### Why
+
+This prevents attendance from being recorded accidentally or manipulated from the frontend.
+
+---
+
+## 5. Sorting and CSV Export
+
+### Problem
+
+The booking list needs sorting, and the attendance data needs to be exported as CSV.
+
+### Decision
+
+For sorting, I used a whitelist of allowed fields instead of directly accepting any field from the request. Session date sorting is handled using a MongoDB aggregation so that filtering, sorting and pagination stay on the database side.
+
+For CSV export, I added escaping for commas, quotes and new lines so that member names or emails do not break the CSV format.
+
+### Why
+
+The whitelist keeps the sorting API predictable and safer, while database-level sorting avoids loading all bookings into memory. Proper CSV escaping keeps the exported file usable when opened in spreadsheet applications.
+
+---
+
+

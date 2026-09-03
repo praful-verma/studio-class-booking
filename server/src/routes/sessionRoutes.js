@@ -50,4 +50,11 @@ router
  */
 router.patch('/:id/cancel', requireRole('STAFF'), sessionController.cancelSession);
 
+/**
+ * @route   GET /api/sessions/:id/attendance.csv
+ * @desc    Export session attendance roster as CSV
+ * @access  Private (STAFF, INSTRUCTOR)
+ */
+router.get('/:id/attendance.csv', requireRole('STAFF', 'INSTRUCTOR'), sessionController.exportAttendanceCsv);
+
 module.exports = router;

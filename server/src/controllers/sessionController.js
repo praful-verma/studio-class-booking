@@ -77,6 +77,8 @@ const updateSession = async (req, res, next) => {
   }
 };
 
+const bookingService = require('../services/bookingService');
+
 /**
  * @route   PATCH /api/sessions/:id/cancel
  * @desc    Cancel a session
@@ -96,10 +98,27 @@ const cancelSession = async (req, res, next) => {
   }
 };
 
+/**
+ * @route   GET /api/sessions/:id/attendance.csv
+ * @desc    Export session attendance roster as CSV
+ * @access  Private (STAFF and INSTRUCTOR)
+ */
+const exportAttendanceCsv = async (req, res, next) => {
+  try {
+    const csvData = await bookingService.exportAttendanceCsv(req.params.id, req.user);
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="attendance-${req.params.id}.csv"`);
+    res.status(200).send(csvData);
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   createSession,
   getAllSessions,
   getSessionById,
   updateSession,
-  cancelSession
+  cancelSession,
+  exportAttendanceCsv
 };

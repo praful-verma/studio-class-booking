@@ -32,6 +32,7 @@ bookingSchema.index({ member: 1, session: 1 }, { unique: true });
 
 // Indexes for fast server-side filtering, roster generation, sorting, and pagination
 bookingSchema.index({ session: 1, status: 1 });
+bookingSchema.index({ session: 1, createdAt: -1 });
 bookingSchema.index({ member: 1, status: 1, createdAt: -1 });
 bookingSchema.index({ status: 1, createdAt: -1 });
 
