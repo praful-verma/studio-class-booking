@@ -90,8 +90,10 @@ The system uses 7 dedicated collections:
 | `member` | ObjectId | Required, Ref: `'Member'` | Booking member |
 | `session` | ObjectId | Required, Ref: `'Session'` | Target class session |
 | `status` | String | Required, enum: `['BOOKED', 'WAITLISTED', 'CANCELLED', 'ATTENDED', 'NO_SHOW']`, default: `'BOOKED'` | Current status |
-| `createdAt` | Date | Auto (timestamps) | Booking timestamp |
+| `createdAt` | Date | Auto (timestamps) | Booking creation timestamp |
 | `updatedAt` | Date | Auto (timestamps) | Last status change timestamp |
+
+*Indexes*: Compound unique index `{ member: 1, session: 1 }` enforces single booking per member per session at database level.
 
 ### 2.7 `bookingHistories`
 | Field | Type | Options / Validation | Description |
@@ -99,10 +101,12 @@ The system uses 7 dedicated collections:
 | `_id` | ObjectId | Auto-generated | Primary Key |
 | `booking` | ObjectId | Required, Ref: `'Booking'` | Parent booking ID |
 | `oldStatus` | String | Required, enum: `['NONE', 'BOOKED', 'WAITLISTED', 'CANCELLED', 'ATTENDED', 'NO_SHOW']` | Previous status |
-| `newStatus` | String | Required, enum: `['BOOKED', 'WAITLISTED', 'CANCELLED', 'ATTENDED', 'NO_SHOW']` | Transitioned status |
-| `changedBy` | ObjectId | Required, Ref: `'User'` | Staff/User who triggered change |
+| `newStatus` | String | Required, enum: `['BOOKED', 'WAITLISTED', 'CANCELLED', 'ATTENDED', 'NO_SHOW']` | New status |
+| `changedBy` | ObjectId | Required, Ref: `'User'` | Staff user who performed status change |
 | `timestamp` | Date | Default: `Date.now` | Event timestamp |
-| `staffNote` | String | Trim | Optional note describing reason |
+| `staffNote` | String | Trimmed, optional | Staff notes/comments |
+
+*Immutability Enforcement*: Pre-save, pre-update, and pre-remove hooks reject any edit or delete operations, ensuring an append-only audit log.
 
 ---
 

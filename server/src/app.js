@@ -6,6 +6,7 @@ const classRoutes = require('./routes/classRoutes');
 const memberRoutes = require('./routes/memberRoutes');
 const roomRoutes = require('./routes/roomRoutes');
 const sessionRoutes = require('./routes/sessionRoutes');
+const bookingRoutes = require('./routes/bookingRoutes');
 const errorHandler = require('./middleware/errorHandler');
 
 const app = express();
@@ -21,6 +22,7 @@ app.use('/api/classes', classRoutes);
 app.use('/api/members', memberRoutes);
 app.use('/api/rooms', roomRoutes);
 app.use('/api/sessions', sessionRoutes);
+app.use('/api/bookings', bookingRoutes);
 
 // Centralized error handling
 app.use(errorHandler);

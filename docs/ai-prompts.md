@@ -89,3 +89,35 @@
 - Registered routes in `app.js` under `/api/rooms` and `/api/sessions`.
 - Updated `docs/architecture.md` and `docs/ai-prompts.md`.
 - Verified Room CRUD/archiving, Session creation with default fallbacks, Room overlap prevention, Primary instructor overlap prevention, Co-instructor overlap prevention, back-to-back scheduling, session cancellation slot freeing, and instructor-scoped visibility filtering via Node integration test script.
+
+---
+
+## Step 6: Complete Booking Lifecycle
+
+### Prompt
+> Implement Step 6 of the Class Booking assignment: complete Booking Lifecycle.
+> Create Booking: STAFF can create booking for any member and session. Reject if membershipExpiry has passed. Prevent duplicate booking for same member + session. If capacity available -> status BOOKED. If session full -> status WAITLISTED. Record initial booking history entry.
+> Booking Cancellation: STAFF can cancel BOOKED or WAITLISTED booking. BOOKED -> CANCELLED auto-promotes earliest WAITLISTED booking for same session to BOOKED (based on creation time). WAITLISTED -> CANCELLED cancels cleanly. Record every status change in immutable booking history.
+> Attendance: After scheduled start time, STAFF can mark BOOKED as ATTENDED or NO_SHOW. ATTENDED and NO_SHOW are terminal states. Attendance before start time rejected with 400.
+> Server-side transition enforcement: Centralized status transition state machine (NONE -> BOOKED/WAITLISTED, BOOKED -> CANCELLED/ATTENDED/NO_SHOW, WAITLISTED -> CANCELLED/BOOKED).
+> Immutable history: BookingHistory records (booking, oldStatus, newStatus, changedBy, timestamp, staffNote). Never editable or deletable.
+> Concurrency / overbooking: Concurrency-safe capacity checks (MongoDB transactions and per-session mutex locking).
+> Endpoints: POST /api/bookings, GET /api/bookings/:id, GET /api/bookings/:id/history, PATCH /api/bookings/:id/cancel, PATCH /api/bookings/:id/attendance.
+> Documentation: Update docs/architecture.md, docs/schema.md, docs/decisions.md, docs/ai-prompts.md. Run automated test suite.
+
+### Result & Verification
+- Implemented `bookingStateService.js`, `bookingService.js`, `bookingController.js`, and `bookingRoutes.js`.
+- Registered routes under `/api/bookings` in `app.js`.
+- Created `docs/decisions.md` documenting concurrency control, state machine matrix, waitlist promotion strategy, and start-time attendance rules.
+- Created and executed `server/src/tests/testBookingLifecycle.js` automated test suite. Verified all 11 test scenarios:
+  1. Available capacity -> `BOOKED`
+  2. Full capacity -> `WAITLISTED`
+  3. Expired member -> Rejected (400)
+  4. Duplicate booking -> Rejected (400)
+  5. Attendance before start time -> Rejected (400)
+  6. Attendance after start time -> `ATTENDED`
+  7. Invalid status transitions -> Forbidden (400)
+  8. `BOOKED` cancellation -> Earliest `WAITLISTED` auto-promoted to `BOOKED`
+  9. `WAITLISTED` cancellation -> `CANCELLED`
+  10. Immutable BookingHistory -> Document modification/deletion blocked by Mongoose pre-hooks
+  11. Concurrent booking requests -> Capacity serialized cleanly without overbooking.

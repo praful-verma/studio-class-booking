@@ -117,6 +117,14 @@ sequenceDiagram
 - `PATCH /api/sessions/:id` — Protected (`requireRole('STAFF')`). Updates session schedule with overlap verification excluding current session ID.
 - `DELETE /api/sessions/:id` / `PATCH /api/sessions/:id/cancel` — Protected (`requireRole('STAFF')`). Sets status to `CANCELLED`, freeing up room and instructor time slots.
 
+### 4.6 Booking Management Routes (`/api/bookings`)
+- `POST /api/bookings` — Protected (`requireRole('STAFF')`). Creates booking. Validates non-expired membership (`membershipExpiry >= currentDate`), enforces duplicate check, assigns `BOOKED` or `WAITLISTED` based on session capacity, logs `BookingHistory`.
+- `GET /api/bookings` — Protected (`requireRole('STAFF', 'INSTRUCTOR')`). Retrieves bookings with filtering and pagination.
+- `GET /api/bookings/:id` — Protected (`requireRole('STAFF', 'INSTRUCTOR')`). Retrieves single booking details.
+- `GET /api/bookings/:id/history` — Protected (`requireRole('STAFF', 'INSTRUCTOR')`). Retrieves chronological immutable audit log history.
+- `PATCH /api/bookings/:id/cancel` — Protected (`requireRole('STAFF')`). Cancels booking (`BOOKED` or `WAITLISTED`). If a `BOOKED` reservation is cancelled, auto-promotes earliest `WAITLISTED` booking to `BOOKED`.
+- `PATCH /api/bookings/:id/attendance` — Protected (`requireRole('STAFF')`). Marks `ATTENDED` or `NO_SHOW` after `session.startDateTime`. Rejects early attendance attempts.
+
 ---
 
 ## 5. Overlap Prevention Algorithm & Business Rules
