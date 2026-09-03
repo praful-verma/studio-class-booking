@@ -14,7 +14,7 @@ This document describes the development plan for the **Class Booking** applicati
 | Step 6  | Booking Lifecycle                                           | Completed |
 | Step 7  | Booking Search, Filtering, Sorting, Pagination & CSV Export | Completed |
 | Step 8  | Recurring Session Generation                                | Completed |
-| Step 9  | Dashboard & Membership Expiry Alerts                        | Pending   |
+| Step 9  | Dashboard & Membership Expiry Alerts                        | Completed |
 | Step 10 | Frontend Integration, Testing, Documentation & Deployment   | Pending   |
 
 ---
@@ -271,9 +271,13 @@ Add:
 
 ### Status
 
-**Pending**
+**Completed**
 
-The dashboard and alert logic will be implemented using server-side queries so that the frontend does not need to calculate these values from large datasets.
+Implemented `GET /api/dashboard` returning server-side calculated metrics (`sessionsToday`, `bookingsToday`, `noShowsThisWeek`, `currentWaitlistedMembers`, `bookingsByStatus`, `bookingsByClass`, and 8-week `attendancePerWeek` trend).
+
+Implemented `GET /api/membership-alerts`, `GET /api/membership-alerts/count`, and `PATCH /api/membership-alerts/:memberId/dismiss` using `dismissedExpiryDate` tracking on the `Member` schema (allowing alerts to reappear upon membership renewal without altering `membershipExpiry`).
+
+Verified via automated test suite `server/src/tests/testStep9DashboardAlerts.js` covering dashboard metrics, status/class groupings, 8-week attendance trend, expired and 7-day expiring member detection, badge count, dismissal tracking, alert reappearance upon renewal, and STAFF vs INSTRUCTOR permissions (`403 Forbidden`).
 
 ---
 

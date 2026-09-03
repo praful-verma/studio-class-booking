@@ -174,6 +174,32 @@ I verified that recurring session generation reuses existing `checkSchedulingCon
 
 ---
 
+## Step 9: Dashboard and Membership Expiry Alerts
+
+### Prompt
+
+> Implement Step 9: Dashboard and Membership Expiry Alerts.
+>
+> Create a STAFF-accessible dashboard API (`GET /api/dashboard`) returning sessions today, bookings today, no-shows this week, current waitlisted members, bookings by status, bookings by class, and attendance per week for the last 8 weeks.
+>
+> Calculate all dashboard metrics server-side using MongoDB queries/aggregations without fetching all records into memory.
+>
+> Create a STAFF-only membership expiry alerts API (`GET /api/membership-alerts`, `GET /api/membership-alerts/count`, `PATCH /api/membership-alerts/:memberId/dismiss`). Return members whose membership has expired or will expire within 7 days (inclusive).
+>
+> Support dismissal without modifying `membershipExpiry`, and ensure that if member's expiry is updated later, the alert reappears when appropriate.
+>
+> Add automated tests for dashboard metrics, alert boundaries, badge count, dismissal tracking, alert reappearance, and STAFF/INSTRUCTOR role restrictions (`403`).
+
+### Result
+
+AI helped me implement `dashboardService.js`, `alertService.js`, controllers, routes, `Member.js` schema extension (`dismissedExpiryDate`), and the automated test suite `server/src/tests/testStep9DashboardAlerts.js`.
+
+### My Review
+
+I checked that all dashboard metrics and 8-week attendance trends are computed server-side using MongoDB aggregation pipelines. I verified that membership alert dismissal sets `dismissedExpiryDate` without altering `membershipExpiry`, and tested that updating a member's expiry date allows the alert to reappear when entering the 7-day window. All tests passed cleanly.
+
+---
+
 ## General Note
 
 I used AI mainly as a coding assistant during the implementation. I reviewed the generated code, compared it with the README requirements, made corrections where necessary, and tested the important flows myself.

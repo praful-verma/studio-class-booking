@@ -7,6 +7,8 @@ const memberRoutes = require('./routes/memberRoutes');
 const roomRoutes = require('./routes/roomRoutes');
 const sessionRoutes = require('./routes/sessionRoutes');
 const bookingRoutes = require('./routes/bookingRoutes');
+const dashboardRoutes = require('./routes/dashboardRoutes');
+const alertRoutes = require('./routes/alertRoutes');
 const errorHandler = require('./middleware/errorHandler');
 
 const app = express();
@@ -23,6 +25,8 @@ app.use('/api/members', memberRoutes);
 app.use('/api/rooms', roomRoutes);
 app.use('/api/sessions', sessionRoutes);
 app.use('/api/bookings', bookingRoutes);
+app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/membership-alerts', alertRoutes);
 
 // Centralized error handling
 app.use(errorHandler);

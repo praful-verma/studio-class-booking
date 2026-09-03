@@ -17,6 +17,10 @@ const memberSchema = new mongoose.Schema(
     membershipExpiry: {
       type: Date,
       required: [true, 'Membership expiry date is required']
+    },
+    dismissedExpiryDate: {
+      type: Date,
+      default: null
     }
   },
   {

@@ -115,5 +115,25 @@ I implemented a partial-success model for `POST /api/sessions/recurring`. Each m
 
 ### Why
 
-This provides staff with transparent feedback on what succeeded and what was skipped, without aborting valid sessions or creating corrupt/overlapping schedule entries.
+---
 
+## 7. Membership Expiry Alert Dismissal & Reappearance Strategy
+
+### Problem
+
+Staff need the ability to dismiss a membership expiry alert without altering the member's actual `membershipExpiry` date. However, using a static boolean flag (`isDismissed: true`) would permanently block future alerts when the member later renews their membership and that new expiry date eventually enters the 7-day alert window.
+
+### Decision
+
+I added a `dismissedExpiryDate` field to the `Member` schema. When staff dismisses an alert for a member (`PATCH /api/membership-alerts/:memberId/dismiss`), `dismissedExpiryDate` is set equal to the member's current `membershipExpiry` date.
+
+An alert is active ONLY IF:
+1. The member's `membershipExpiry` is expired or expires within 7 days.
+2. `member.dismissedExpiryDate` is null OR `member.dismissedExpiryDate.getTime() !== member.membershipExpiry.getTime()`.
+
+### Why
+
+This satisfies all constraints cleanly:
+* The member's actual `membershipExpiry` date is never modified upon dismissal.
+* The current alert is hidden because `dismissedExpiryDate === membershipExpiry`.
+* When the member renews their membership to a new future date, `dismissedExpiryDate` no longer equals the new `membershipExpiry` date. When that new date reaches the 7-day window, the alert automatically reappears.
