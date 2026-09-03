@@ -15,7 +15,7 @@ This document describes the development plan for the **Class Booking** applicati
 | Step 7  | Booking Search, Filtering, Sorting, Pagination & CSV Export | Completed |
 | Step 8  | Recurring Session Generation                                | Completed |
 | Step 9  | Dashboard & Membership Expiry Alerts                        | Completed |
-| Step 10 | Frontend Integration, Testing, Documentation & Deployment   | Pending   |
+| Step 10 | Frontend Integration, Testing, Documentation & Deployment   | Completed |
 
 ---
 
@@ -351,7 +351,11 @@ The documentation will describe the actual implementation and decisions made dur
 
 ### Status
 
-**Pending**
+**Completed**
+
+Built the React/Vite frontend (`client/src`) with JWT authentication (`AuthContext`), reusable HTTP client layer (`client.js`), role-aware layout & routing (`ProtectedRoute`), and pages for Login, Dashboard, Classes, Members, Rooms, Sessions, Bookings, Recurring Sessions, and Membership Expiry Alerts.
+
+Verified JSX build cleanly via `vite build` (0 errors) and validated backend API compatibility against all test suites.
 
 ---
 

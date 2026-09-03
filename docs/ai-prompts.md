@@ -200,6 +200,28 @@ I checked that all dashboard metrics and 8-week attendance trends are computed s
 
 ---
 
+## Step 10: Frontend Integration
+
+### Prompt
+
+> Implement Step 10, Phase 1: Frontend integration for the Class Booking application.
+>
+> Connect the backend functionality to a clean React/Vite frontend.
+>
+> Implement authentication (login, secure token storage, `/api/auth/me` verification, logout, role-based navigation), layout with alert badge count, and STAFF/INSTRUCTOR role workflows for Dashboard, Classes, Members, Rooms, Sessions, Bookings, Recurring Sessions, Membership Alerts, and Attendance CSV export.
+>
+> Maintain clean API handling and rely strictly on the backend as the source of truth for authorization, capacity, waitlists, and scheduling rules.
+
+### Result
+
+AI helped me create the API client layer (`client.js`, API modules), `AuthContext`, `ProtectedRoute`, `Layout`, `Modal`, `Pagination`, `StatusPill`, and all page components (`Login`, `Dashboard`, `Classes`, `Members`, `Rooms`, `Sessions`, `Bookings`, `RecurringSessions`, `MembershipAlerts`).
+
+### My Review
+
+I verified that the frontend compiles cleanly via `vite build` with zero errors. I tested role-based routing (`STAFF` vs `INSTRUCTOR`), form submissions, search/filter/sort pagination, modal dialogs, attendance CSV downloading, and alert dismissal badge updating.
+
+---
+
 ## General Note
 
 I used AI mainly as a coding assistant during the implementation. I reviewed the generated code, compared it with the README requirements, made corrections where necessary, and tested the important flows myself.

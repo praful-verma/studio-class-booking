@@ -1,57 +1,99 @@
-import { useState, useEffect } from 'react';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import { ProtectedRoute } from './components/ProtectedRoute';
+import { Layout } from './components/Layout';
+import { Login } from './pages/Login';
+import { Dashboard } from './pages/Dashboard';
+import { Classes } from './pages/Classes';
+import { Members } from './pages/Members';
+import { Rooms } from './pages/Rooms';
+import { Sessions } from './pages/Sessions';
+import { Bookings } from './pages/Bookings';
+import { RecurringSessions } from './pages/RecurringSessions';
+import { MembershipAlerts } from './pages/MembershipAlerts';
+
+function HomeRedirect() {
+  const { user, isStaff } = useAuth();
+  if (!user) return <Navigate to="/login" replace />;
+  return isStaff ? <Navigate to="/dashboard" replace /> : <Navigate to="/sessions" replace />;
+}
 
 function App() {
-  const [apiStatus, setApiStatus] = useState('Checking...');
-  const [apiMessage, setApiMessage] = useState('');
-  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-
-  useEffect(() => {
-    fetch(`${apiUrl}/health`)
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.status === 'ok') {
-          setApiStatus('Connected');
-          setApiMessage(data.message);
-        } else {
-          setApiStatus('Disconnected');
-        }
-      })
-      .catch(() => {
-        setApiStatus('Offline');
-      });
-  }, [apiUrl]);
-
   return (
-    <div className="container">
-      <span className="badge">System Status</span>
-      <h1>Class Booking</h1>
-      <p className="subtitle">
-        Project foundation successfully initialized. Application is ready for feature development.
-      </p>
+    <AuthProvider>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/login" element={<Login />} />
 
-      <div className="status-card">
-        <div className="status-item">
-          <span className="status-label">Frontend Application</span>
-          <span className="status-pill connected">Running</span>
-        </div>
-        <div className="status-item">
-          <span className="status-label">Backend API URL</span>
-          <span className="status-value">{apiUrl}</span>
-        </div>
-        <div className="status-item">
-          <span className="status-label">API Health Status</span>
-          <span className={`status-pill ${apiStatus === 'Connected' ? 'connected' : 'checking'}`}>
-            {apiStatus}
-          </span>
-        </div>
-        {apiMessage && (
-          <div className="status-item">
-            <span className="status-label">API Message</span>
-            <span className="status-value">{apiMessage}</span>
-          </div>
-        )}
-      </div>
-    </div>
+          <Route
+            path="/"
+            element={
+              <ProtectedRoute requiredRole="INSTRUCTOR">
+                <Layout />
+              </ProtectedRoute>
+            }
+          >
+            <Route index element={<HomeRedirect />} />
+
+            {/* STAFF-only Routes */}
+            <Route
+              path="dashboard"
+              element={
+                <ProtectedRoute requiredRole="STAFF">
+                  <Dashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="classes"
+              element={
+                <ProtectedRoute requiredRole="STAFF">
+                  <Classes />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="members"
+              element={
+                <ProtectedRoute requiredRole="STAFF">
+                  <Members />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="rooms"
+              element={
+                <ProtectedRoute requiredRole="STAFF">
+                  <Rooms />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="recurring-sessions"
+              element={
+                <ProtectedRoute requiredRole="STAFF">
+                  <RecurringSessions />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="membership-alerts"
+              element={
+                <ProtectedRoute requiredRole="STAFF">
+                  <MembershipAlerts />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Shared Routes (STAFF & INSTRUCTOR) */}
+            <Route path="sessions" element={<Sessions />} />
+            <Route path="bookings" element={<Bookings />} />
+          </Route>
+
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </BrowserRouter>
+    </AuthProvider>
   );
 }
 
