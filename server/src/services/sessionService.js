@@ -415,10 +415,222 @@ const cancelSession = async (id) => {
   return Session.findById(id).populate('classId room primaryInstructor coInstructors');
 };
 
+/**
+ * Helper to normalize days of week input into a Set of numbers (0=Sun to 6=Sat).
+ */
+const normalizeDaysOfWeek = (pattern) => {
+  if (!pattern) return new Set();
+  const arr = Array.isArray(pattern) ? pattern : [pattern];
+  const dayMap = {
+    sunday: 0, sun: 0, '0': 0,
+    monday: 1, mon: 1, '1': 1,
+    tuesday: 2, tue: 2, tues: 2, '2': 2,
+    wednesday: 3, wed: 3, '3': 3,
+    thursday: 4, thu: 4, thur: 4, thurs: 4, '4': 4,
+    friday: 5, fri: 5, '5': 5,
+    saturday: 6, sat: 6, '6': 6
+  };
+
+  const resultSet = new Set();
+  for (const item of arr) {
+    if (typeof item === 'number' && item >= 0 && item <= 6) {
+      resultSet.add(item);
+    } else if (item !== undefined && item !== null) {
+      const key = String(item).trim().toLowerCase();
+      if (dayMap[key] !== undefined) {
+        resultSet.add(dayMap[key]);
+      }
+    }
+  }
+  return resultSet;
+};
+
+/**
+ * Bulk-generates sessions for a weekly pattern across a date range.
+ * Reuses existing validation and overlap checks. Skips conflicting/duplicate occurrences with clear reasons.
+ */
+const generateRecurringSessions = async (data) => {
+  const {
+    classId,
+    startDate,
+    endDate,
+    weeklyPattern,
+    daysOfWeek,
+    startTime,
+    primaryInstructor,
+    room,
+    coInstructors,
+    duration,
+    capacity
+  } = data;
+
+  if (!classId || !startDate || !endDate || !startTime || !primaryInstructor || !room) {
+    const error = new Error('Please provide classId, startDate, endDate, startTime, primaryInstructor, and room.');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const patternInput = weeklyPattern !== undefined ? weeklyPattern : daysOfWeek;
+  const targetDaysSet = normalizeDaysOfWeek(patternInput);
+  if (targetDaysSet.size === 0) {
+    const error = new Error('Please provide a valid weeklyPattern or daysOfWeek (e.g. ["MONDAY", "WEDNESDAY"] or [1, 3]).');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const startObj = new Date(startDate);
+  const endObj = new Date(endDate);
+
+  if (isNaN(startObj.getTime()) || isNaN(endObj.getTime())) {
+    const error = new Error('Invalid startDate or endDate format.');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  if (startObj > endObj) {
+    const error = new Error('startDate must be before or equal to endDate.');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  // 1. Validate Class
+  const classDoc = await Class.findById(classId);
+  if (!classDoc) {
+    const error = new Error('Class not found.');
+    error.statusCode = 404;
+    throw error;
+  }
+  if (classDoc.isArchived) {
+    const error = new Error('Cannot schedule sessions for an archived class.');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  // 2. Validate Room
+  const roomDoc = await Room.findById(room);
+  if (!roomDoc) {
+    const error = new Error('Room not found.');
+    error.statusCode = 404;
+    throw error;
+  }
+  if (roomDoc.isArchived) {
+    const error = new Error('Cannot schedule sessions in an archived room.');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  // 3. Fallbacks for duration & capacity
+  const finalDuration = duration !== undefined ? Number(duration) : classDoc.defaultDuration;
+  const finalCapacity = capacity !== undefined ? Number(capacity) : classDoc.defaultCapacity;
+
+  if (isNaN(finalDuration) || finalDuration < 1) {
+    const error = new Error('Duration must be a number greater than or equal to 1.');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  if (isNaN(finalCapacity) || finalCapacity < 1) {
+    const error = new Error('Capacity must be a number greater than or equal to 1.');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  // 4. Validate Instructors
+  const validatedCoInstructors = await validateInstructors(primaryInstructor, coInstructors);
+
+  // 5. Date Loop Iteration
+  const createdSessions = [];
+  const skippedSessions = [];
+
+  const currentDate = new Date(Date.UTC(
+    startObj.getUTCFullYear(),
+    startObj.getUTCMonth(),
+    startObj.getUTCDate()
+  ));
+
+  const lastDate = new Date(Date.UTC(
+    endObj.getUTCFullYear(),
+    endObj.getUTCMonth(),
+    endObj.getUTCDate()
+  ));
+
+  while (currentDate <= lastDate) {
+    const dayOfWeek = currentDate.getUTCDay();
+    if (targetDaysSet.has(dayOfWeek)) {
+      const dateStr = currentDate.toISOString().split('T')[0];
+
+      // Calculate startDateTime and endDateTime for candidate date
+      const { dateOnly, startDateTime, endDateTime } = calculateDateTimes(dateStr, startTime, finalDuration);
+
+      // Duplicate Check: Check if an active/scheduled session already exists for same class, room, and startDateTime
+      const existingDuplicate = await Session.findOne({
+        classId,
+        room,
+        startDateTime,
+        status: { $ne: 'CANCELLED' }
+      });
+
+      if (existingDuplicate) {
+        skippedSessions.push({
+          date: dateStr,
+          startTime: startTime.trim(),
+          reason: 'Duplicate session already exists for this class, room, and start time.'
+        });
+      } else {
+        // Overlap Check (Room & Instructors)
+        try {
+          await checkSchedulingConflicts({
+            roomId: room,
+            primaryInstructorId: primaryInstructor,
+            coInstructorIds: validatedCoInstructors,
+            startDateTime,
+            endDateTime
+          });
+
+          // No conflicts or duplicates -> Create Session
+          const newSession = await Session.create({
+            classId,
+            date: dateOnly,
+            startTime: startTime.trim(),
+            duration: finalDuration,
+            startDateTime,
+            endDateTime,
+            capacity: finalCapacity,
+            primaryInstructor,
+            coInstructors: validatedCoInstructors,
+            room,
+            status: 'SCHEDULED'
+          });
+
+          const populated = await Session.findById(newSession._id).populate('classId room primaryInstructor coInstructors');
+          createdSessions.push(populated);
+        } catch (conflictError) {
+          skippedSessions.push({
+            date: dateStr,
+            startTime: startTime.trim(),
+            reason: conflictError.message
+          });
+        }
+      }
+    }
+
+    // Increment date by 1 day
+    currentDate.setUTCDate(currentDate.getUTCDate() + 1);
+  }
+
+  return {
+    created: createdSessions.length,
+    skipped: skippedSessions.length,
+    createdSessions,
+    skippedSessions
+  };
+};
+
 module.exports = {
   createSession,
   getAllSessions,
   getSessionById,
   updateSession,
-  cancelSession
+  cancelSession,
+  generateRecurringSessions
 };

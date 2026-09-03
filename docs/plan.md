@@ -13,7 +13,7 @@ This document describes the development plan for the **Class Booking** applicati
 | Step 5  | Rooms & Session Scheduling                                  | Completed |
 | Step 6  | Booking Lifecycle                                           | Completed |
 | Step 7  | Booking Search, Filtering, Sorting, Pagination & CSV Export | Completed |
-| Step 8  | Recurring Session Generation                                | Pending   |
+| Step 8  | Recurring Session Generation                                | Completed |
 | Step 9  | Dashboard & Membership Expiry Alerts                        | Pending   |
 | Step 10 | Frontend Integration, Testing, Documentation & Deployment   | Pending   |
 
@@ -210,26 +210,30 @@ Existing booking lifecycle tests were run again after these changes.
 
 ## Step 8: Recurring Session Generation
 
-Add the staff workflow for generating sessions from a weekly schedule.
+Add the staff workflow for generating sessions from a weekly schedule across a date range.
 
 ### Planned Work
 
 * Select a class
 * Select primary instructor and room
-* Set date range
-* Define weekly schedule
+* Set date range (`startDate`, `endDate`)
+* Define weekly schedule pattern (e.g. `['MONDAY', 'WEDNESDAY']`)
 * Generate sessions for matching days
 * Use class duration and capacity defaults unless overridden
 * Reuse existing room and instructor overlap checks
 * Skip conflicting sessions instead of creating invalid sessions
 * Report how many sessions were created
 * Report which sessions were skipped and why
+* Prevent duplicate session generation on resubmission
+* Restrict endpoint access to STAFF (`403` for INSTRUCTOR)
 
 ### Status
 
-**Pending**
+**Completed**
 
-This will build on the existing session scheduling and overlap-checking logic instead of creating a separate scheduling system.
+Implemented endpoint `POST /api/sessions/recurring` with server-side role validation, date iteration, fallback defaults, duplicate checking, and overlap skipping.
+
+Verified via automated test suite `server/src/tests/testStep8RecurringSessions.js` covering date range matching, duration/capacity overrides, room conflict skipping, instructor conflict skipping, duplicate submission skipping, archived resource rejection, and STAFF vs INSTRUCTOR permissions.
 
 ---
 

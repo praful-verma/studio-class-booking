@@ -114,11 +114,29 @@ const exportAttendanceCsv = async (req, res, next) => {
   }
 };
 
+/**
+ * @route   POST /api/sessions/recurring
+ * @desc    Bulk-generate recurring class sessions for a weekly pattern
+ * @access  Private (STAFF only)
+ */
+const generateRecurringSessions = async (req, res, next) => {
+  try {
+    const result = await sessionService.generateRecurringSessions(req.body);
+    res.status(201).json({
+      status: 'success',
+      data: result
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   createSession,
   getAllSessions,
   getSessionById,
   updateSession,
   cancelSession,
-  exportAttendanceCsv
+  exportAttendanceCsv,
+  generateRecurringSessions
 };

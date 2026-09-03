@@ -99,4 +99,21 @@ The whitelist keeps the sorting API predictable and safer, while database-level 
 
 ---
 
+## 6. Recurring Session Generation & Conflict Handling
+
+### Problem
+
+When generating sessions across a multi-week date range, some dates may have room or instructor scheduling conflicts, or duplicate sessions may already exist from prior generation runs. Rolling back the entire batch because of a single conflict would force staff to manually create individual sessions.
+
+### Decision
+
+I implemented a partial-success model for `POST /api/sessions/recurring`. Each matching date in the date range is processed independently:
+
+* Valid non-conflicting dates create a scheduled session document.
+* Conflicting or duplicate dates are skipped and recorded in a `skippedSessions` array with a descriptive reason (e.g., `'Room scheduling conflict...'`, `'Instructor scheduling conflict...'`, or `'Duplicate session already exists...'`).
+* The API returns a summary containing `{ created, skipped, createdSessions, skippedSessions }`.
+
+### Why
+
+This provides staff with transparent feedback on what succeeded and what was skipped, without aborting valid sessions or creating corrupt/overlapping schedule entries.
 

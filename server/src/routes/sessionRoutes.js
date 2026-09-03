@@ -23,6 +23,13 @@ router
   .get(requireRole('STAFF', 'INSTRUCTOR'), sessionController.getAllSessions);
 
 /**
+ * @route   POST /api/sessions/recurring
+ * @desc    Bulk-generate recurring class sessions across a date range
+ * @access  Private (STAFF only)
+ */
+router.post('/recurring', requireRole('STAFF'), sessionController.generateRecurringSessions);
+
+/**
  * @route   GET /api/sessions/:id
  * @desc    Get a single session by ID
  * @access  Private (STAFF, INSTRUCTOR)
