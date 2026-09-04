@@ -12,9 +12,7 @@ Two users could try to book the same session at almost the same time. If both re
 
 ### Decision
 
-I used MongoDB transactions for the booking operation so that the capacity check and booking creation are handled together.
-
-For local development where transactions may not be available, I also added a per-session lock so that booking requests for the same session are processed one at a time.
+I use MongoDB transactions for booking creation, cancellation, waitlist promotion, and related history creation. For local development environments where MongoDB transactions are unavailable, I also use a per-session in-memory lock to serialize booking operations.
 
 ### Why
 
@@ -47,21 +45,26 @@ Keeping these rules in one place makes the booking flow easier to understand and
 
 ---
 
-## 3. Waitlist Promotion
+### 3. Waitlist Promotion
 
-### Problem
+**Problem**
 
 When a booked member cancels, the available place should go to someone on the waitlist.
 
-### Decision
+**Decision**
 
 I promote the earliest waitlisted booking based on its creation time.
 
 Before promoting it, the member's membership expiry is checked. A new `BookingHistory` entry is also created for the promotion.
 
-### Why
+The cancellation and waitlist promotion are performed within the same MongoDB transaction so that the cancellation and promotion remain atomic and the session cannot be left in an inconsistent state.
+
+**Why**
 
 Using creation time gives a simple first-come-first-served order for the waitlist.
+
+Keeping cancellation, waitlist promotion, and their history entries in the same transaction ensures that either the complete operation succeeds or none of it is applied.
+
 
 ---
 
@@ -89,7 +92,7 @@ The booking list needs sorting, and the attendance data needs to be exported as 
 
 ### Decision
 
-For sorting, I used a whitelist of allowed fields instead of directly accepting any field from the request. Session date sorting is handled using a MongoDB aggregation so that filtering, sorting and pagination stay on the database side.
+For sorting, I used a whitelist of allowed fields instead of directly accepting any field from the request. Booking filtering, sorting, and pagination are performed server-side, with session date/time sorting handled through MongoDB aggregation.
 
 For CSV export, I added escaping for commas, quotes and new lines so that member names or emails do not break the CSV format.
 
@@ -115,6 +118,7 @@ I implemented a partial-success model for `POST /api/sessions/recurring`. Each m
 
 ### Why
 
+Partial success makes the bulk operation more useful because one scheduling conflict does not prevent all valid sessions from being created. Returning explicit skip reasons also gives staff enough information to correct conflicts and retry only the affected dates.
 ---
 
 ## 7. Membership Expiry Alert Dismissal & Reappearance Strategy
@@ -137,3 +141,26 @@ This satisfies all constraints cleanly:
 * The member's actual `membershipExpiry` date is never modified upon dismissal.
 * The current alert is hidden because `dismissedExpiryDate === membershipExpiry`.
 * When the member renews their membership to a new future date, `dismissedExpiryDate` no longer equals the new `membershipExpiry` date. When that new date reaches the 7-day window, the alert automatically reappears.
+
+
+### 8.Deriving Membership Validity Instead of Storing Status
+
+### Problem
+
+The member model initially included a separate membership status such as ACTIVE or EXPIRED. This created two sources of truth because the status could disagree with the actual membershipExpiry date.
+
+### Initial Decision
+
+I initially considered storing an explicit membership status field.
+
+### Reversed Decision
+
+I later removed the status field and decided to derive membership validity from membershipExpiry at runtime.
+
+### Why I Reversed It
+
+The expiry date is already the authoritative piece of information. Deriving validity avoids synchronization problems and removes the need to update a status field whenever time passes.
+
+### Result
+
+The booking service checks membershipExpiry when determining whether a member can create a new booking. Expiry alerts also use the same date-based logic.

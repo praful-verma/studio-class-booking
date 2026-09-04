@@ -36,6 +36,12 @@ The required models and schema documentation were created.
 
 I went through the models and checked the relationships, indexes and constraints against the assignment requirements.
 
+One design issue was identified during review: the member model initially included a separate membership status field such as `ACTIVE` or `EXPIRED`. I decided this was unnecessary because membership validity can be derived directly from `membershipExpiry`.
+
+### Correction
+
+I removed the separate membership status field and made `membershipExpiry` the source of truth for membership validity.
+
 ---
 
 ## Step 3: Authentication and Authorization
@@ -55,6 +61,12 @@ AI helped me add the authentication flow, JWT middleware and role-based authoriz
 ### My Review
 
 I checked the login flow, JWT handling and role restrictions and tested protected routes. I also updated the environment configuration and architecture documentation.
+
+### Correction
+
+The initial implementation used a fallback JWT secret in the authentication code. I considered this unsafe because production authentication should depend on an explicitly configured environment variable.
+
+I removed the fallback and made the JWT secret configuration mandatory.
 
 ---
 
@@ -78,6 +90,8 @@ AI helped me implement the class and member routes, controllers and services.
 
 I checked the CRUD operations, role restrictions, archived class behaviour, email validation and duplicate member handling.
 
+I also verified that instructors should not have access to the member directory because the assignment only gives them access to sessions and bookings for sessions they are assigned to.
+
 ---
 
 ## Step 5: Rooms and Session Scheduling
@@ -97,6 +111,8 @@ AI helped me implement the room and session APIs and the scheduling validation.
 ### My Review
 
 I tested room CRUD, session creation, default duration/capacity, instructor assignment and the different overlap cases. I also checked that instructors cannot access unrelated sessions.
+
+I specifically verified that the overlap rule allows back-to-back sessions and that cancelled sessions do not continue blocking rooms or instructors.
 
 ---
 
@@ -121,6 +137,23 @@ AI helped me implement the booking services, controllers, routes and booking sta
 ### My Review
 
 I tested the main booking scenarios including booking, waitlisting, duplicate bookings, expired memberships, cancellation, waitlist promotion and attendance. I also checked the booking history and concurrency handling.
+
+### Correction
+
+During review, I made sure the booking state transitions were centralized rather than allowing individual controllers to directly change booking statuses.
+
+The final transition rules were:
+
+| Current Status | Allowed Status               |
+| -------------- | ---------------------------- |
+| NONE           | BOOKED, WAITLISTED           |
+| BOOKED         | CANCELLED, ATTENDED, NO_SHOW |
+| WAITLISTED     | CANCELLED, BOOKED            |
+| CANCELLED      | None                         |
+| ATTENDED       | None                         |
+| NO_SHOW        | None                         |
+
+I also verified that cancellation and automatic waitlist promotion happen within the same transaction so the operation remains consistent.
 
 ---
 
@@ -220,8 +253,26 @@ AI helped me create the API client layer (`client.js`, API modules), `AuthContex
 
 I verified that the frontend compiles cleanly via `vite build` with zero errors. I tested role-based routing (`STAFF` vs `INSTRUCTOR`), form submissions, search/filter/sort pagination, modal dialogs, attendance CSV downloading, and alert dismissal badge updating.
 
+### Correction: Instructor Lookup Endpoint
+
+During browser testing, the primary instructor dropdown was empty even though the backend session functionality was working.
+
+I traced the issue to the frontend requesting:
+
+`GET /api/users?role=INSTRUCTOR`
+
+but the backend did not yet expose that endpoint. The frontend was therefore receiving a 404 and showing an empty instructor list.
+
+I added a protected `GET /api/users?role=INSTRUCTOR` endpoint that returns only active instructors and safe fields (`_id`, `name`, `email`, `role`). Password hashes and other sensitive fields are not returned.
+
+After the correction, I re-tested session creation and recurring session generation successfully.
+
 ---
 
 ## General Note
 
 I used AI mainly as a coding assistant during the implementation. I reviewed the generated code, compared it with the README requirements, made corrections where necessary, and tested the important flows myself.
+
+I did not treat generated code as automatically correct. I verified the implementation through backend tests, frontend builds, browser testing and manual review of authorization and business rules.
+
+When AI output conflicted with the assignment requirements or project design, I corrected the implementation rather than accepting the generated output unchanged.

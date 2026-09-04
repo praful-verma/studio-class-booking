@@ -102,7 +102,7 @@ The system uses 7 dedicated collections:
 | `booking` | ObjectId | Required, Ref: `'Booking'` | Parent booking ID |
 | `oldStatus` | String | Required, enum: `['NONE', 'BOOKED', 'WAITLISTED', 'CANCELLED', 'ATTENDED', 'NO_SHOW']` | Previous status |
 | `newStatus` | String | Required, enum: `['BOOKED', 'WAITLISTED', 'CANCELLED', 'ATTENDED', 'NO_SHOW']` | New status |
-| `changedBy` | ObjectId | Required, Ref: `'User'` | Staff user who performed status change |
+| `changedBy` | ObjectId | Required, Ref: `'User'` | User who performed the status change. Must be an authorized STAFF or assigned INSTRUCTOR.  |
 | `timestamp` | Date | Default: `Date.now` | Event timestamp |
 | `staffNote` | String | Trimmed, optional | Staff notes/comments |
 
@@ -118,7 +118,7 @@ The system uses 7 dedicated collections:
 - **`BookingHistory -> Booking, User`**: History entries reference parent bookings and users for auditability.
 
 ### Deliberate Denormalization
-- **`startDateTime` & `endDateTime` in `Session`**: Computed from `date`, `startTime`, and `duration`. Denormalizing these exact timestamps allows single-range queries and compound indexes for room/instructor overlap detection (`$gte` / `$lte`).
+- **`startDateTime` & `endDateTime` in `Session`**: Computed from `date`, `startTime`, and `duration`. Denormalizing these exact timestamps allows efficient time-range queries for room and instructor overlap detection using the condition existing.startDateTime < newEndDateTime AND existing.endDateTime > newStartDateTime.
 
 ---
 
@@ -165,7 +165,7 @@ The system uses 7 dedicated collections:
    - The primary instructor (`{ primaryInstructor, startDateTime, endDateTime }`)
    - Any assigned co-instructors (`{ coInstructors, startDateTime, endDateTime }`)
 3. **Session Capacity Cap**: Application layer validates that active `BOOKED` count does not exceed `session.capacity` before confirming a booking (otherwise placing on `WAITLISTED`).
-4. **Membership Validity & Booking Eligibility Check**: Membership status (`ACTIVE` vs `EXPIRED`) is dynamically evaluated at runtime based on `membershipExpiry`. The booking service checks booking eligibility by verifying that the current booking timestamp does not exceed `member.membershipExpiry` (expired memberships are ineligible to create new bookings).
+4. **Membership Validity & Booking Eligibility Check**: Membership validity is derived from membershipExpiry; no separate membership status field is stored. The booking service checks the current time against member.membershipExpiry, and expired memberships cannot create new bookings.
 
 ---
 
@@ -173,4 +173,4 @@ The system uses 7 dedicated collections:
 
 1. **Unbounded `bookingHistories` Growth**: As bookings accumulate status transitions, history documents will grow rapidly. *Mitigation*: Compound index `{ booking: 1, timestamp: -1 }` keeps queries fast; archived cold storage can be introduced at scale.
 2. **Overlap Query Index Size**: High volume of historical sessions will increase compound index size for `{ room: 1, startDateTime: 1, endDateTime: 1 }` and `{ primaryInstructor/coInstructors: 1, startDateTime: 1, endDateTime: 1 }`. *Mitigation*: Partial indexes filtering only active/future sessions (`status: 'SCHEDULED'`).
-3. **Waitlist Auto-promotion Concurrency**: High-demand sessions with simultaneous cancellations and waitlist promotions can suffer from race conditions. *Mitigation*: MongoDB transactions or atomic `$findOneAndUpdate` operations with session version locking.
+3. **Waitlist Auto-promotion Concurrency**: High-demand sessions with simultaneous cancellations and waitlist promotions can suffer from race conditions. Mitigation: MongoDB transactions keep booking creation, cancellation, waitlist promotion, and history creation atomic. An in-process per-session lock additionally serializes concurrent booking operations within the same server instance.
