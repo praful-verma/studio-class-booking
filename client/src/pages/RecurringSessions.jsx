@@ -45,7 +45,7 @@ export const RecurringSessions = () => {
       const [classRes, roomRes, usersRes] = await Promise.all([
         classApi.getClasses(false),
         roomApi.getRooms(false),
-        fetchApi('/users?role=INSTRUCTOR').catch(() => ({ data: { users: [] } }))
+        fetchApi('/users?role=INSTRUCTOR')
       ]);
 
       if (classRes.data?.classes) {
@@ -66,7 +66,9 @@ export const RecurringSessions = () => {
           setFormData(prev => ({ ...prev, primaryInstructor: usersRes.data.users[0]._id }));
         }
       }
-    } catch (e) {}
+    } catch (e) {
+      setError(e.message || 'Failed to load form resources');
+    }
   };
 
   const handleDayToggle = (dayVal) => {

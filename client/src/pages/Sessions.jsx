@@ -62,13 +62,15 @@ export const Sessions = () => {
       const [classRes, roomRes, usersRes] = await Promise.all([
         classApi.getClasses(false),
         roomApi.getRooms(false),
-        fetchApi('/users?role=INSTRUCTOR').catch(() => ({ data: { users: [] } }))
+        fetchApi('/users?role=INSTRUCTOR')
       ]);
 
       if (classRes.data?.classes) setClasses(classRes.data.classes);
       if (roomRes.data?.rooms) setRooms(roomRes.data.rooms);
       if (usersRes.data?.users) setInstructors(usersRes.data.users);
-    } catch (e) {}
+    } catch (e) {
+      setError(e.message || 'Failed to load dropdown resource data');
+    }
   };
 
   const handleOpenCreateModal = () => {
