@@ -87,19 +87,19 @@ async function runStep7Tests() {
 
   // 4. Setup Members (including special characters for CSV escaping test)
   const memberAlice = await memberService.createMember({
-    name: 'Alice Johnson',
+    name: `Alice Johnson ${timestamp}`,
     email: `alice_${timestamp}@example.com`,
     membershipExpiry: '2035-12-31'
   });
 
   const memberBob = await memberService.createMember({
-    name: 'Bob Smith',
+    name: `Bob Smith ${timestamp}`,
     email: `bob_${timestamp}@example.com`,
     membershipExpiry: '2035-12-31'
   });
 
   const memberSpecial = await memberService.createMember({
-    name: 'O\'Connor, "Special" \nMember',
+    name: `O'Connor, "Special" \nMember ${timestamp}`,
     email: `special_${timestamp}@example.com`,
     membershipExpiry: '2035-12-31'
   });
@@ -118,7 +118,7 @@ async function runStep7Tests() {
 
   // --- TEST 1: Member Name Text Search ---
   console.log('[TEST 1] Testing Member Name Text Search ("Alice")...');
-  const resSearchName = await bookingService.getAllBookings({ search: 'Alice' }, staffUser);
+  const resSearchName = await bookingService.getAllBookings({ search: `Alice Johnson ${timestamp}` }, staffUser);
   console.log(`  -> Found ${resSearchName.total} bookings for "Alice" (Expected: 2)`);
   if (resSearchName.total !== 2) throw new Error('Test 1 Failed: Expected 2 bookings for Alice');
 
@@ -209,7 +209,7 @@ async function runStep7Tests() {
   console.log(staffCsv);
   console.log('------------------------------------');
 
-  if (!staffCsv.includes('"O\'Connor, ""Special"" \nMember"')) {
+  if (!staffCsv.includes(`"O'Connor, ""Special"" \nMember ${timestamp}"`)) {
     throw new Error('Test 13 Failed: Special characters (quotes, commas, newlines) were not correctly escaped in CSV!');
   }
   console.log('  -> Special character escaping verified successfully!');

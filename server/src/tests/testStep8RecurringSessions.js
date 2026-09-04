@@ -119,11 +119,18 @@ async function runStep8Tests() {
   }
 
   // --- TEST 3: Room Conflict Handling & Partial Continuation ---
-  console.log('\n[TEST 3] Testing Room Conflict handling (Pre-booking a conflicting room session on 2032-01-19)...');
-  // Create a single conflicting session in activeRoom on 2032-01-19 (Tuesday) at 09:00 - 10:00
+  console.log('\n[TEST 3] Testing Room Conflict handling (Pre-booking a conflicting room session on 2032-01-20)...');
+  const conflictingClass = await classService.createClass({
+    title: `Conflicting Class ${timestamp}`,
+    discipline: 'Pilates',
+    defaultDuration: 60,
+    defaultCapacity: 10
+  });
+
+  // Create a single conflicting session in activeRoom on 2032-01-20 (Tuesday) at 09:00 - 10:00
   await sessionService.createSession({
-    classId: activeClass._id,
-    date: '2032-01-19',
+    classId: conflictingClass._id,
+    date: '2032-01-20',
     startTime: '09:00',
     primaryInstructor: inst2._id, // different instructor, same room
     room: activeRoom._id,
@@ -131,10 +138,7 @@ async function runStep8Tests() {
     capacity: 10
   });
 
-  // Now bulk generate for Tuesdays from 2032-01-15 to 2032-01-31 (Tuesdays: 2032-01-20, 2032-01-27... wait, 2032-01-19 is Tuesday!)
-  // Dates: 2032-01-20 (Tue), 2032-01-27 (Tue)
-  // Let's generate for range 2032-01-18 to 2032-01-28 for Tuesdays (2032-01-20 is Tue, 2032-01-27 is Tue)
-  // Let's generate range 2032-01-18 to 2032-01-28 for Tuesdays: 2032-01-20, 2032-01-27. 2032-01-20 overlaps with pre-booked 2032-01-19 if start date is 2032-01-19!
+  // Now bulk generate for Tuesdays from 2032-01-19 to 2032-01-27 (Tuesdays: 2032-01-20, 2032-01-27)
   const res3 = await sessionService.generateRecurringSessions({
     classId: activeClass._id,
     startDate: '2032-01-19',
@@ -155,11 +159,11 @@ async function runStep8Tests() {
   }
 
   // --- TEST 4: Instructor Conflict Handling ---
-  console.log('\n[TEST 4] Testing Instructor Conflict handling (Pre-booking Instructor 1 elsewhere on 2032-02-02)...');
+  console.log('\n[TEST 4] Testing Instructor Conflict handling (Pre-booking Instructor 1 elsewhere on 2032-02-03)...');
   const otherRoom = await roomService.createRoom({ name: `Other Room ${timestamp}`, capacity: 10 });
   await sessionService.createSession({
     classId: activeClass._id,
-    date: '2032-02-02', // Tuesday
+    date: '2032-02-03', // Tuesday
     startTime: '14:00',
     primaryInstructor: inst1._id,
     room: otherRoom._id
