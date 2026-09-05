@@ -37,7 +37,7 @@ Set up the basic project structure and development environment.
 
 **Completed**
 
-The initial client and server applications are running and the project is ready for feature development.
+The initial client and server applications were set up and the project was ready for feature development.
 
 ---
 
@@ -128,6 +128,8 @@ Implement rooms and the scheduling system.
 
 Room and session scheduling are implemented, including the required overlap checks and instructor access restrictions.
 
+Back-to-back sessions are allowed, while overlapping room or instructor schedules are rejected on the server.
+
 ---
 
 ## Step 6: Booking Lifecycle
@@ -154,7 +156,7 @@ Implement the main booking workflow.
 
 The complete booking lifecycle is implemented, including booking, waitlisting, cancellation, promotion, attendance and booking history.
 
-The main booking scenarios were tested after implementation to make sure the existing booking flow continued to work correctly.
+Booking operations use database transactions for correctness during concurrent requests. Booking history is kept immutable and status transitions are validated on the server.
 
 ---
 
@@ -164,7 +166,7 @@ Add the tools needed to search and manage existing bookings efficiently.
 
 ### Planned Work
 
-#### Booking List
+### Booking List
 
 Add `GET /api/bookings` with:
 
@@ -176,14 +178,14 @@ Add `GET /api/bookings` with:
 * Total result count
 * Sorting by supported fields
 
-#### Role-Based Visibility
+### Role-Based Visibility
 
 * STAFF can view bookings across all sessions.
 * INSTRUCTOR can only view bookings for sessions where they are assigned as the primary or co-instructor.
 
 The restriction is applied on the server/database query.
 
-#### Attendance CSV
+### Attendance CSV
 
 Add:
 
@@ -202,9 +204,9 @@ STAFF can export any session, while INSTRUCTOR access is limited to assigned ses
 
 **Completed**
 
-The search, filtering, pagination, sorting and instructor visibility behaviour were tested. Attendance CSV export was also tested, including CSV escaping for special characters.
+The search, filtering, pagination, sorting and instructor visibility behaviour were implemented and tested.
 
-Existing booking lifecycle tests were run again after these changes.
+Attendance CSV export was also tested, including CSV escaping for special characters.
 
 ---
 
@@ -217,7 +219,7 @@ Add the staff workflow for generating sessions from a weekly schedule across a d
 * Select a class
 * Select primary instructor and room
 * Set date range (`startDate`, `endDate`)
-* Define weekly schedule pattern (e.g. `['MONDAY', 'WEDNESDAY']`)
+* Define weekly schedule pattern
 * Generate sessions for matching days
 * Use class duration and capacity defaults unless overridden
 * Reuse existing room and instructor overlap checks
@@ -231,9 +233,9 @@ Add the staff workflow for generating sessions from a weekly schedule across a d
 
 **Completed**
 
-Implemented endpoint `POST /api/sessions/recurring` with server-side role validation, date iteration, fallback defaults, duplicate checking, and overlap skipping.
+Implemented `POST /api/sessions/recurring` with server-side role validation, date iteration, fallback defaults, duplicate checking, and overlap skipping.
 
-Verified via automated test suite `server/src/tests/testStep8RecurringSessions.js` covering date range matching, duration/capacity overrides, room conflict skipping, instructor conflict skipping, duplicate submission skipping, archived resource rejection, and STAFF vs INSTRUCTOR permissions.
+The recurring session workflow was tested for date matching, duration and capacity overrides, room conflicts, instructor conflicts, duplicate generation, archived resources, and STAFF vs INSTRUCTOR permissions.
 
 ---
 
@@ -243,7 +245,7 @@ Add the remaining operational information required by the assignment.
 
 ### Planned Work
 
-#### Dashboard
+### Dashboard
 
 Show:
 
@@ -255,7 +257,7 @@ Show:
 * Bookings by class
 * Attendance per week for the last 8 weeks
 
-#### Membership Expiry Alerts
+### Membership Expiry Alerts
 
 Show members whose membership:
 
@@ -273,11 +275,11 @@ Add:
 
 **Completed**
 
-Implemented `GET /api/dashboard` returning server-side calculated metrics (`sessionsToday`, `bookingsToday`, `noShowsThisWeek`, `currentWaitlistedMembers`, `bookingsByStatus`, `bookingsByClass`, and 8-week `attendancePerWeek` trend).
+Implemented `GET /api/dashboard` with server-side calculated metrics for sessions, bookings, no-shows, waitlisted members, booking status/class breakdowns, and the 8-week attendance trend.
 
-Implemented `GET /api/membership-alerts`, `GET /api/membership-alerts/count`, and `PATCH /api/membership-alerts/:memberId/dismiss` using `dismissedExpiryDate` tracking on the `Member` schema (allowing alerts to reappear upon membership renewal without altering `membershipExpiry`).
+Implemented membership expiry alert endpoints with dismissal tracking and alert reappearance after membership renewal.
 
-Verified via automated test suite `server/src/tests/testStep9DashboardAlerts.js` covering dashboard metrics, status/class groupings, 8-week attendance trend, expired and 7-day expiring member detection, badge count, dismissal tracking, alert reappearance upon renewal, and STAFF vs INSTRUCTOR permissions (`403 Forbidden`).
+The dashboard and alert behaviour was verified through the backend test suite and browser workflow testing.
 
 ---
 
@@ -287,7 +289,7 @@ Connect the completed backend functionality to the frontend and prepare the proj
 
 ### Planned Work
 
-#### Frontend
+### Frontend
 
 * Login and authentication state
 * Role-based navigation
@@ -305,9 +307,9 @@ Connect the completed backend functionality to the frontend and prepare the proj
 * Expiry alerts
 * CSV export
 
-The UI will focus on making the required workflows clear and usable rather than adding unnecessary features.
+The UI focuses on making the required workflows clear and usable rather than adding unnecessary features.
 
-#### Final Testing
+### Final Testing
 
 Test the complete application from the frontend and API level.
 
@@ -325,9 +327,9 @@ Check:
 * Expiry alerts
 * Invalid requests and server-side authorization
 
-#### Documentation
+### Documentation
 
-Review and complete:
+The project documentation includes:
 
 * `README.md`
 * `docs/architecture.md`
@@ -335,10 +337,9 @@ Review and complete:
 * `docs/plan.md`
 * `docs/decisions.md`
 * `docs/ai-prompts.md`
+* `SUBMISSION.md`
 
-The documentation will describe the actual implementation and decisions made during development.
-
-#### Deployment
+### Deployment
 
 * Configure production environment variables
 * Deploy frontend
@@ -347,47 +348,28 @@ The documentation will describe the actual implementation and decisions made dur
 * Add demo data
 * Add demo credentials
 * Verify the deployed application
-* Remove or disable development-only endpoints and test data
+* Remove automated test data from the production database
 
 ### Status
 
 **Completed**
 
-Built the React/Vite frontend (`client/src`) with JWT authentication (`AuthContext`), reusable HTTP client layer (`client.js`), role-aware layout & routing (`ProtectedRoute`), and pages for Login, Dashboard, Classes, Members, Rooms, Sessions, Bookings, Recurring Sessions, and Membership Expiry Alerts.
+The React/Vite frontend was integrated with the completed backend using JWT authentication, protected routes, role-aware navigation, reusable API helpers, and pages for the required workflows.
 
-Verified JSX build cleanly via `vite build` (0 errors) and validated backend API compatibility against all test suites.
+The production frontend build completed successfully.
+
+The application was tested through 33 browser E2E scenarios along with backend regression tests covering the booking lifecycle, booking search/export, recurring sessions, dashboard/alerts, and user access.
+
+The application was deployed with Vercel for the frontend, Render for the backend, and MongoDB Atlas for the database.
+
+Production connectivity and the main Staff and Instructor workflows were verified after deployment. Realistic demo data was added and the automated test data was removed from the production database before submission.
 
 ---
 
+## Final Status
 
-## Current Project Status
+All required application functionality has been implemented, tested, deployed, and verified.
 
-All required application features have been implemented and the frontend is integrated with the backend.
+The repository and production demo are ready for submission.
 
-### Completed
-
-- Authentication and role-based authorization
-- Class and member management
-- Room management
-- Session scheduling and conflict prevention
-- Primary and co-instructor assignment
-- Booking and waitlist lifecycle
-- Attendance and no-show handling
-- Immutable booking history
-- Booking search, filtering, sorting and pagination
-- Attendance CSV export
-- Recurring session generation
-- Dashboard metrics
-- Membership expiry alerts
-- React/Vite frontend integration
-- Browser E2E testing of the main STAFF and INSTRUCTOR workflows
-
-### Remaining Work
-
-- Final documentation review and cleanup
-- Final build and regression verification
-- Production deployment
-- Deployed application verification
-- Final submission preparation
-
-The implementation remains focused on the required assignment functionality, with optional features avoided unless the required functionality is complete.
+The implementation remains focused on the required assignment functionality, with optional features avoided unless the required functionality was complete.
