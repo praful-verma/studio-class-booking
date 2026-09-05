@@ -128,7 +128,7 @@ The system uses 7 dedicated collections:
 |---|---|---|---|
 | `users` | `{ email: 1 }` | Unique | Fast lookup and uniqueness enforcement |
 | `members` | `{ email: 1 }` | Unique | Fast lookup and uniqueness enforcement |
-| `members` | `{ membershipExpiry: 1 }` | Single | Querying active/expired memberships |
+| `members` | `{ membershipExpiry: 1 }` | Single | Efficient membership expiry-window and expired-member queries |
 | `classes` | `{ title: "text", discipline: "text" }` | Text | Title/discipline search |
 | `classes` | `{ isArchived: 1 }` | Single | Filtering active vs archived classes |
 | `rooms` | `{ name: 1 }` | Unique | Room name uniqueness |
@@ -142,6 +142,7 @@ The system uses 7 dedicated collections:
 | `bookings` | `{ member: 1, status: 1, createdAt: -1 }` | Compound | Member booking history queries |
 | `bookings` | `{ status: 1, createdAt: -1 }` | Compound | Filtering and sorting bookings |
 | `bookingHistories` | `{ booking: 1, timestamp: -1 }` | Compound | Chronological audit trail lookup per booking |
+| `bookings` | `{ session: 1, createdAt: -1 }` | Compound | Efficient chronological booking/roster queries and waitlist ordering |
 
 ---
 
@@ -164,7 +165,7 @@ The system uses 7 dedicated collections:
    - The room (`{ room, startDateTime, endDateTime }`)
    - The primary instructor (`{ primaryInstructor, startDateTime, endDateTime }`)
    - Any assigned co-instructors (`{ coInstructors, startDateTime, endDateTime }`)
-3. **Session Capacity Cap**: Application layer validates that active `BOOKED` count does not exceed `session.capacity` before confirming a booking (otherwise placing on `WAITLISTED`).
+3. **Session Capacity Cap**: Booking creation checks the current BOOKED count against session.capacity. The booking operation runs inside the concurrency-control flow so simultaneous booking requests cannot overbook the session.
 4. **Membership Validity & Booking Eligibility Check**: Membership validity is derived from membershipExpiry; no separate membership status field is stored. The booking service checks the current time against member.membershipExpiry, and expired memberships cannot create new bookings.
 
 ---

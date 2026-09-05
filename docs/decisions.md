@@ -1,22 +1,22 @@
 # Architectural Decisions & Design Rationale
 
-This file contains the main technical decisions I made while building the Class Booking application. I have focused on decisions where there was more than one possible approach.
-
----
+This file records the main technical decisions made while building the Class Booking application. I focused on areas where there were multiple possible approaches and where the choice affects correctness or maintainability.
 
 ## 1. Handling Concurrent Bookings
 
 ### Problem
 
-Two users could try to book the same session at almost the same time. If both requests check the available capacity before either booking is saved, the session could become overbooked.
+Two users could try to book the same session at almost the same time. If both requests check capacity before either booking is saved, the session could become overbooked.
 
 ### Decision
 
-I use MongoDB transactions for booking creation, cancellation, waitlist promotion, and related history creation. For local development environments where MongoDB transactions are unavailable, I also use a per-session in-memory lock to serialize booking operations.
+I use MongoDB transactions for booking creation, cancellation, waitlist promotion, and related history creation.
+
+For local development environments where MongoDB transactions are unavailable, I also use a per-session in-memory lock to serialize booking operations.
 
 ### Why
 
-The main goal was to make sure the session capacity cannot be exceeded even when multiple booking requests arrive together.
+The main goal is to make sure session capacity cannot be exceeded when multiple booking requests arrive together.
 
 ---
 
@@ -24,20 +24,22 @@ The main goal was to make sure the session capacity cannot be exceeded even when
 
 ### Problem
 
-Booking status can change in several ways, and allowing status updates from different places in the code could result in invalid transitions.
+Booking status can change in several ways. If status updates are handled independently in different parts of the application, invalid transitions can be introduced.
 
 ### Decision
 
-I created a separate booking state service to control the allowed status changes.
+I created a separate booking state service that controls the allowed status transitions.
 
-| Current Status | Allowed Status               |
-| -------------- | ---------------------------- |
-| NONE           | BOOKED, WAITLISTED           |
-| BOOKED         | CANCELLED, ATTENDED, NO_SHOW |
-| WAITLISTED     | CANCELLED, BOOKED            |
-| CANCELLED      | None                         |
-| ATTENDED       | None                         |
-| NO_SHOW        | None                         |
+| Current Status         | Allowed Status                     |
+| ---------------------- | ---------------------------------- |
+| Initial state (`NONE`) | `BOOKED`, `WAITLISTED`             |
+| `BOOKED`               | `CANCELLED`, `ATTENDED`, `NO_SHOW` |
+| `WAITLISTED`           | `CANCELLED`, `BOOKED`              |
+| `CANCELLED`            | None                               |
+| `ATTENDED`             | None                               |
+| `NO_SHOW`              | None                               |
+
+`NONE` is used only for the initial booking history entry and is not a persisted Booking status.
 
 ### Why
 
@@ -45,26 +47,25 @@ Keeping these rules in one place makes the booking flow easier to understand and
 
 ---
 
-### 3. Waitlist Promotion
+## 3. Waitlist Promotion
 
-**Problem**
+### Problem
 
 When a booked member cancels, the available place should go to someone on the waitlist.
 
-**Decision**
+### Decision
 
 I promote the earliest waitlisted booking based on its creation time.
 
-Before promoting it, the member's membership expiry is checked. A new `BookingHistory` entry is also created for the promotion.
+Before promoting the booking, the member's membership expiry is checked. A new `BookingHistory` entry is also created for the promotion.
 
-The cancellation and waitlist promotion are performed within the same MongoDB transaction so that the cancellation and promotion remain atomic and the session cannot be left in an inconsistent state.
+The cancellation, waitlist promotion, and related history entries are performed within the same MongoDB transaction.
 
-**Why**
+### Why
 
-Using creation time gives a simple first-come-first-served order for the waitlist.
+Using creation time provides a simple first-come-first-served waitlist order.
 
-Keeping cancellation, waitlist promotion, and their history entries in the same transaction ensures that either the complete operation succeeds or none of it is applied.
-
+Keeping the cancellation and promotion in the same transaction ensures that either the complete operation succeeds or none of it is applied.
 
 ---
 
@@ -76,11 +77,11 @@ Attendance should not be marked before a session actually starts.
 
 ### Decision
 
-I added a server-side check that compares the current time with the session's `startDateTime`. Attendance can only be marked after the scheduled start time.
+The server compares the current time with the session's `startDateTime`. Attendance can only be marked after the scheduled start time.
 
 ### Why
 
-This prevents attendance from being recorded accidentally or manipulated from the frontend.
+This prevents attendance from being recorded accidentally or manipulated through the frontend.
 
 ---
 
@@ -88,17 +89,21 @@ This prevents attendance from being recorded accidentally or manipulated from th
 
 ### Problem
 
-The booking list needs sorting, and the attendance data needs to be exported as CSV.
+The booking list needs sorting, and attendance data needs to be exported as CSV.
 
 ### Decision
 
-For sorting, I used a whitelist of allowed fields instead of directly accepting any field from the request. Booking filtering, sorting, and pagination are performed server-side, with session date/time sorting handled through MongoDB aggregation.
+For sorting, I use a whitelist of allowed fields instead of directly accepting any field from the request.
 
-For CSV export, I added escaping for commas, quotes and new lines so that member names or emails do not break the CSV format.
+Booking filtering, sorting, and pagination are performed server-side. Session date/time sorting is handled through MongoDB aggregation.
+
+For CSV export, values are escaped for commas, quotes, and new lines so that member names or emails do not break the CSV format.
 
 ### Why
 
-The whitelist keeps the sorting API predictable and safer, while database-level sorting avoids loading all bookings into memory. Proper CSV escaping keeps the exported file usable when opened in spreadsheet applications.
+The whitelist keeps the sorting API predictable and safer. Database-level filtering, sorting, and pagination also avoids loading all bookings into the browser.
+
+Proper CSV escaping keeps the exported file usable in spreadsheet applications.
 
 ---
 
@@ -106,48 +111,68 @@ The whitelist keeps the sorting API predictable and safer, while database-level 
 
 ### Problem
 
-When generating sessions across a multi-week date range, some dates may have room or instructor scheduling conflicts, or duplicate sessions may already exist from prior generation runs. Rolling back the entire batch because of a single conflict would force staff to manually create individual sessions.
+When generating sessions across a multi-week date range, some dates may have room or instructor scheduling conflicts. Duplicate sessions may also already exist from a previous generation attempt.
+
+Rolling back the entire batch because of one conflict would force staff to create the remaining sessions manually.
 
 ### Decision
 
-I implemented a partial-success model for `POST /api/sessions/recurring`. Each matching date in the date range is processed independently:
+I implemented a partial-success model for `POST /api/sessions/recurring`.
 
-* Valid non-conflicting dates create a scheduled session document.
-* Conflicting or duplicate dates are skipped and recorded in a `skippedSessions` array with a descriptive reason (e.g., `'Room scheduling conflict...'`, `'Instructor scheduling conflict...'`, or `'Duplicate session already exists...'`).
-* The API returns a summary containing `{ created, skipped, createdSessions, skippedSessions }`.
+Each matching date is processed independently:
+
+* Valid, non-conflicting dates create a scheduled session.
+* Conflicting or duplicate dates are skipped.
+* Skipped dates are recorded in `skippedSessions` with a descriptive reason such as:
+
+  * Room scheduling conflict
+  * Instructor scheduling conflict
+  * Duplicate session already exists
+* The API returns a summary containing:
+  `created`, `skipped`, `createdSessions`, and `skippedSessions`.
 
 ### Why
 
-Partial success makes the bulk operation more useful because one scheduling conflict does not prevent all valid sessions from being created. Returning explicit skip reasons also gives staff enough information to correct conflicts and retry only the affected dates.
+Partial success makes the bulk operation more useful because one conflict does not prevent all valid sessions from being created.
+
+Returning the skip reasons also gives staff enough information to fix conflicts and retry the affected dates.
+
 ---
 
-## 7. Membership Expiry Alert Dismissal & Reappearance Strategy
+## 7. Membership Expiry Alert Dismissal & Reappearance
 
 ### Problem
 
-Staff need the ability to dismiss a membership expiry alert without altering the member's actual `membershipExpiry` date. However, using a static boolean flag (`isDismissed: true`) would permanently block future alerts when the member later renews their membership and that new expiry date eventually enters the 7-day alert window.
+Staff need to dismiss a membership expiry alert without changing the member's actual `membershipExpiry` date.
+
+A simple boolean such as `isDismissed: true` would permanently hide future alerts for that member, even after the member renews.
 
 ### Decision
 
-I added a `dismissedExpiryDate` field to the `Member` schema. When staff dismisses an alert for a member (`PATCH /api/membership-alerts/:memberId/dismiss`), `dismissedExpiryDate` is set equal to the member's current `membershipExpiry` date.
+I added a `dismissedExpiryDate` field to the Member schema.
 
-An alert is active ONLY IF:
-1. The member's `membershipExpiry` is expired or expires within 7 days.
-2. `member.dismissedExpiryDate` is null OR `member.dismissedExpiryDate.getTime() !== member.membershipExpiry.getTime()`.
+When staff dismisses an alert through `PATCH /api/membership-alerts/:memberId/dismiss`, `dismissedExpiryDate` is set to the member's current `membershipExpiry`.
+
+An alert is active only when:
+
+1. The membership is expired or expires within the next 7 days.
+2. `dismissedExpiryDate` is null, or it does not equal the current `membershipExpiry`.
 
 ### Why
 
-This satisfies all constraints cleanly:
-* The member's actual `membershipExpiry` date is never modified upon dismissal.
-* The current alert is hidden because `dismissedExpiryDate === membershipExpiry`.
-* When the member renews their membership to a new future date, `dismissedExpiryDate` no longer equals the new `membershipExpiry` date. When that new date reaches the 7-day window, the alert automatically reappears.
+This allows the current alert to be dismissed without changing the actual membership expiry date.
 
+When the member renews, the new `membershipExpiry` no longer matches `dismissedExpiryDate`. The alert can therefore appear again when the new expiry enters the 7-day window.
 
-### 8.Deriving Membership Validity Instead of Storing Status
+---
+
+## 8. Deriving Membership Validity Instead of Storing Status
 
 ### Problem
 
-The member model initially included a separate membership status such as ACTIVE or EXPIRED. This created two sources of truth because the status could disagree with the actual membershipExpiry date.
+The member model initially included a separate membership status such as `ACTIVE` or `EXPIRED`.
+
+This created two sources of truth because the stored status could disagree with the actual `membershipExpiry` date.
 
 ### Initial Decision
 
@@ -155,12 +180,16 @@ I initially considered storing an explicit membership status field.
 
 ### Reversed Decision
 
-I later removed the status field and decided to derive membership validity from membershipExpiry at runtime.
+I later removed the status field and decided to derive membership validity from `membershipExpiry` at runtime.
 
 ### Why I Reversed It
 
-The expiry date is already the authoritative piece of information. Deriving validity avoids synchronization problems and removes the need to update a status field whenever time passes.
+The expiry date is already the authoritative piece of information.
+
+Deriving validity avoids synchronization problems and removes the need to update a status field as time passes.
 
 ### Result
 
-The booking service checks membershipExpiry when determining whether a member can create a new booking. Expiry alerts also use the same date-based logic.
+The booking service checks `membershipExpiry` when determining whether a member can create a new booking.
+
+Membership expiry alerts also use the same date-based logic.

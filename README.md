@@ -79,12 +79,13 @@ Instructor access to unrelated sessions and staff-only operations is rejected by
 * Mongoose
 * JWT
 * bcryptjs
-* CSS
+* Vanilla CSS
 
 ## Project Structure
 
 ```text
 studio-class-booking/
+
 ├── client/
 │   ├── src/
 │   │   ├── api/
@@ -106,7 +107,7 @@ studio-class-booking/
 │   │   ├── routes/
 │   │   ├── services/
 │   │   ├── tests/
-│   │   ├── seed.js
+│   │   ├── seedDemoData.js
 │   │   └── server.js
 │   ├── .env.example
 │   └── package.json
@@ -118,6 +119,7 @@ studio-class-booking/
 │   ├── decisions.md
 │   └── ai-prompts.md
 │
+├── SUBMISSION.md
 └── README.md
 ```
 
@@ -139,6 +141,7 @@ MongoDB Atlas can be used for this.
 
 ```bash
 git clone <your-github-repository-url>
+
 cd studio-class-booking
 ```
 
@@ -181,7 +184,7 @@ Do not commit `.env` files or real secrets to GitHub.
 
 ## Demo Data
 
-The backend includes a seed script for creating demo users.
+The backend includes a seed script for creating realistic demo data, including users, classes, rooms, members, sessions and bookings.
 
 From the `server` directory:
 
@@ -189,9 +192,9 @@ From the `server` directory:
 npm run seed
 ```
 
-The demo accounts created by the seed script can be used to test the two application roles.
+The demo accounts created by the seed script can be used to test both STAFF and INSTRUCTOR workflows.
 
-Check `server/src/seed.js` for the current demo credentials.
+Check `server/src/seedDemoData.js` for the demo account setup.
 
 ## Running the Application
 
@@ -220,8 +223,6 @@ npm run dev
 
 Vite will show the local frontend URL in the terminal.
 
-```
-
 ## API
 
 The backend exposes REST APIs for the main parts of the application.
@@ -245,17 +246,12 @@ Some important endpoints include:
 ```text
 POST   /api/auth/login
 GET    /api/auth/me
-
 GET    /api/users?role=INSTRUCTOR
-
 POST   /api/sessions/recurring
-
 GET    /api/dashboard
-
 GET    /api/membership-alerts
 GET    /api/membership-alerts/count
 PATCH  /api/membership-alerts/:memberId/dismiss
-
 GET    /api/sessions/:id/attendance.csv
 ```
 
@@ -297,10 +293,13 @@ For example:
 
 ```text
 BOOKED -> CANCELLED
+
 BOOKED -> ATTENDED
+
 BOOKED -> NO_SHOW
 
 WAITLISTED -> CANCELLED
+
 WAITLISTED -> BOOKED
 ```
 
@@ -314,9 +313,13 @@ From the `server` directory:
 
 ```bash
 node src/tests/testBookingLifecycle.js
+
 node src/tests/testStep7SearchExport.js
+
 node src/tests/testStep8RecurringSessions.js
+
 node src/tests/testStep9DashboardAlerts.js
+
 node src/tests/testUsersEndpoint.js
 ```
 
@@ -365,7 +368,7 @@ More detailed project information is available in the `docs` folder:
 
 ## Current Status
 
-The main required application features have been implemented and tested.
+The required application features have been implemented, tested, deployed and verified.
 
 Completed:
 
@@ -375,19 +378,18 @@ Completed:
 * Session scheduling
 * Booking and waitlist lifecycle
 * Attendance handling
-* Booking history
-* Booking search and pagination
+* Immutable booking history
+* Booking search, filtering, sorting and pagination
 * Attendance CSV export
 * Recurring session generation
 * Dashboard
 * Membership expiry alerts
 * React/Vite frontend
 * STAFF and INSTRUCTOR browser workflows
-
-Remaining:
-
-* Final documentation review
-* Final regression verification
+* Backend regression tests
 * Production deployment
 * Deployed application verification
-* Final submission preparation
+* Project documentation
+* Submission documentation
+
+The deployed application and demo credentials are documented in `SUBMISSION.md`.
