@@ -189,7 +189,7 @@ The backend includes a seed script for creating realistic demo data, including u
 From the `server` directory:
 
 ```bash
-npm run seed
+npm run seed:demo
 ```
 
 The demo accounts created by the seed script can be used to test both STAFF and INSTRUCTOR workflows.
